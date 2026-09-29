@@ -179,7 +179,7 @@ a{color:inherit;text-decoration:none}
         class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <button id="noise-toggle" onclick="toggleNoiseFilter()" title="Hide unrecognized stations and noise" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Clean Feed: ON</button>
+      <button id="noise-toggle" onclick="toggleNoiseFilter()" title="Clean Feed: only broadcasts whose MP4 has finished transcoding, hide unrecognized stations" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Clean Feed: ON</button>
       <select id="showFilterDropdown" onchange="applyShowFilter()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-3 py-2 max-w-[150px] truncate outline-none cursor-pointer">
         <option value="ALL">All Shows</option>
       </select>
@@ -451,6 +451,18 @@ function clearSkeletons() {
   document.querySelectorAll('#results-grid .skel').forEach(e => e.remove());
 }
 
+// Builds the archive.org search query. Clean Feed's transcode filter lives here:
+// the search index labels every derived MP4 with format "h.264" (verified
+// across all 9 stations — untranscoded items only carry MPEGTS/Metadata/XML),
+// so results arrive pre-filtered from the single search request. The filter
+// applies as results load, never after the fact, with zero extra requests.
+function buildQuery(term, channels) {
+  let q = `mediatype:movies AND (${channels.join(' OR ')})`;
+  if (term) q += ` AND (title:(${term}) OR description:(${term}))`;
+  if (state.filterNoise) q += ` AND format:"h.264"`;
+  return q;
+}
+
 async function search(append = false) {
   const grid = $('results-grid');
   const pag = $('pagination');
@@ -468,8 +480,7 @@ async function search(append = false) {
     return;
   }
 
-  let q = `mediatype:movies AND (${channels.join(' OR ')})`;
-  if (term) q += ` AND (title:(${term}) OR description:(${term}))`;
+  let q = buildQuery(term, channels);
 
   const params = new URLSearchParams({
     q,
@@ -662,7 +673,7 @@ function toggleNoiseFilter() {
   state.filterNoise = !state.filterNoise;
   document.body.classList.toggle('hide-noise', state.filterNoise);
   $('noise-toggle').textContent = state.filterNoise ? 'Clean Feed: ON' : 'Clean Feed: OFF';
-  // CSS (.hide-noise .noise-item) applies the filter instantly — no re-fetch needed.
+  resetAndSearch(); // the transcode filter lives in the query — re-run it
 }
 
 /* ================= PLAYER ================= */
