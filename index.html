@@ -127,8 +127,8 @@ select option { background: #0f172a; }
     </div>
 
     <div class="vid-stack group" id="vid-wrap">
-      <video id="vid-a" class="is-active" playsinline preload="metadata"></video>
-      <video id="vid-b" playsinline preload="metadata"></video>
+      <video id="vid-a" class="is-active" playsinline preload="metadata" aria-label="TV News Archive player"></video>
+      <video id="vid-b" playsinline preload="metadata" aria-hidden="true" tabindex="-1"></video>
 
       <div id="player-error" class="hidden absolute inset-0 flex-col items-center justify-center gap-3 bg-black/80 text-center p-6">
         <div class="text-red-400 text-sm font-black uppercase tracking-widest">Playback unavailable</div>
