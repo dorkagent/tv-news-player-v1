@@ -73,7 +73,7 @@ select option { background: #0f172a; }
         class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <button id="noise-toggle" onclick="toggleNoiseFilter()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Clean Feed: ON</button>
+      <button id="noise-toggle" onclick="toggleNoiseFilter()" title="Hide broadcasts that haven't finished transcoding yet, plus unrecognized stations" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Clean Feed: ON</button>
       <select id="showFilterDropdown" onchange="applyShowFilter()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-3 py-2 max-w-[150px] truncate outline-none cursor-pointer">
         <option value="ALL">All Shows</option>
       </select>
@@ -234,6 +234,7 @@ const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
 const state = {
   page: 1,
   allItems: [],
+  transcodeCache: new Map(), // identifier -> true (mp4 derived) / false (not yet)
   filterNoise: true,
   // player
   isPlayerOpen: false,
@@ -475,6 +476,7 @@ function renderItems(docs) {
     const card = document.createElement('div');
     card.className = `card group cursor-pointer ${m.isNoise ? 'noise-item' : ''}`;
     card.setAttribute('data-show-name', m.show);
+    card.setAttribute('data-identifier', doc.identifier);
 
     const thumb = document.createElement('div');
     thumb.className = 'relative aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900';
@@ -527,6 +529,7 @@ function renderItems(docs) {
   });
   updateShowDropdown();
   applyShowFilter(); // FIX: filter must apply to freshly appended pages too
+  probeTranscodes(docs); // Clean Feed: hide broadcasts whose mp4 hasn't derived yet
 }
 
 function copyApiUrl() {
@@ -578,8 +581,74 @@ function toggleNoiseFilter() {
   state.filterNoise = !state.filterNoise;
   document.body.classList.toggle('hide-noise', state.filterNoise);
   $('noise-toggle').textContent = state.filterNoise ? 'Clean Feed: ON' : 'Clean Feed: OFF';
+  if (state.filterNoise) probeTranscodes(state.allItems.map(it => it.doc));
   updateShowDropdown();
   applyShowFilter();
+}
+
+/* Clean Feed transcode check: hide broadcasts whose mp4 hasn't been derived yet.
+   archive.org's download host sends no CORS headers, so fetch() can't read a
+   status — but a detached <video> element fires loadedmetadata/canplay on
+   success and error on 404 without needing CORS. Still archive.org-only. */
+const TRANSCODE_PROBE_CONCURRENCY = 6;
+const TRANSCODE_PROBE_TIMEOUT_MS = 20000;
+const TRANSCODE_RECENT_MS = 24 * 3600 * 1000; // only recent items can be mid-transcode
+
+function probeTranscodes(docs) {
+  if (!state.filterNoise) return;
+  const queue = docs.filter(d => {
+    if (state.transcodeCache.has(d.identifier)) return false;
+    const t = Date.parse(d.publicdate || '');
+    return !t || (Date.now() - t) < TRANSCODE_RECENT_MS;
+  });
+  if (!queue.length) return;
+  let i = 0;
+  const workers = Array.from({ length: Math.min(TRANSCODE_PROBE_CONCURRENCY, queue.length) }, async () => {
+    while (i < queue.length) {
+      const doc = queue[i++];
+      const ok = await probeTranscoded(doc.identifier);
+      state.transcodeCache.set(doc.identifier, ok);
+      if (!ok && state.filterNoise) markUntranscoded(doc.identifier);
+    }
+  });
+  Promise.all(workers).then(() => { updateShowDropdown(); applyShowFilter(); });
+}
+
+async function probeTranscoded(id) {
+  // exact {id}.mp4 first (the standard streamable derivative)
+  if (await probeMp4(`${CONFIG.DL_BASE}${id}/${encodeURIComponent(id + '.mp4')}`)) return true;
+  // rare: derivative under a different name — check the file list once
+  try {
+    const res = await fetch(`${CONFIG.API_META}${id}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return (data.files || []).some(f => f.name.endsWith('.mp4') && !f.name.toLowerCase().includes('thumb'));
+  } catch { return false; }
+}
+
+function probeMp4(url) {
+  return new Promise(resolve => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    let done = false;
+    const finish = (ok) => {
+      if (done) return; done = true;
+      v.removeAttribute('src'); v.load(); v.remove(); // abort immediately on success
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(true), TRANSCODE_PROBE_TIMEOUT_MS); // fail open
+    v.addEventListener('loadedmetadata', () => { clearTimeout(timer); finish(true); });
+    v.addEventListener('canplay', () => { clearTimeout(timer); finish(true); });
+    v.addEventListener('error', () => { clearTimeout(timer); finish(false); });
+    v.src = url;
+  });
+}
+
+function markUntranscoded(id) {
+  const card = document.querySelector(`#results-grid [data-identifier="${CSS.escape(id)}"]`);
+  if (card) card.classList.add('noise-item');
+  const item = state.allItems.find(it => it.doc.identifier === id);
+  if (item) item.meta.isNoise = true;
 }
 
 /* ================= PLAYER ================= */
