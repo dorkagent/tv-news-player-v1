@@ -590,33 +590,44 @@ function toggleNoiseFilter() {
    archive.org's download host sends no CORS headers, so fetch() can't read a
    status — but a detached <video> element fires loadedmetadata/canplay on
    success and error on 404 without needing CORS. Still archive.org-only. */
-const TRANSCODE_PROBE_CONCURRENCY = 6;
-const TRANSCODE_PROBE_TIMEOUT_MS = 20000;
-const TRANSCODE_RECENT_MS = 24 * 3600 * 1000; // only recent items can be mid-transcode
+const TRANSCODE_PROBE_CONCURRENCY = 2; // keep low: probes share archive.org's per-host connection pool with search, thumbs, and video
+const TRANSCODE_PROBE_TIMEOUT_MS = 10000;
+const TRANSCODE_RECENT_MS = 4 * 3600 * 1000; // derives usually finish within an hour or two; older items are long done
+const TRANSCODE_PROBE_DELAY_MS = 2500; // let search results + thumbnails win the connection race first
+let probeRunId = 0; // bumped per search; stale runs abort instead of competing
 
 function probeTranscodes(docs) {
   if (!state.filterNoise) return;
+  const runId = ++probeRunId;
   const queue = docs.filter(d => {
     if (state.transcodeCache.has(d.identifier)) return false;
     const t = Date.parse(d.publicdate || '');
     return !t || (Date.now() - t) < TRANSCODE_RECENT_MS;
   });
   if (!queue.length) return;
-  let i = 0;
-  const workers = Array.from({ length: Math.min(TRANSCODE_PROBE_CONCURRENCY, queue.length) }, async () => {
-    while (i < queue.length) {
-      const doc = queue[i++];
-      const ok = await probeTranscoded(doc.identifier);
-      state.transcodeCache.set(doc.identifier, ok);
-      if (!ok && state.filterNoise) markUntranscoded(doc.identifier);
-    }
-  });
-  Promise.all(workers).then(() => { updateShowDropdown(); applyShowFilter(); });
+  setTimeout(() => {
+    if (runId !== probeRunId || !state.filterNoise) return;
+    let i = 0;
+    const workers = Array.from({ length: Math.min(TRANSCODE_PROBE_CONCURRENCY, queue.length) }, async () => {
+      while (i < queue.length && runId === probeRunId) {
+        const doc = queue[i++];
+        const ok = await probeTranscoded(doc.identifier, runId);
+        if (runId !== probeRunId) return; // a newer search started; drop everything
+        state.transcodeCache.set(doc.identifier, ok);
+        if (!ok && state.filterNoise) markUntranscoded(doc.identifier);
+      }
+    });
+    Promise.all(workers).then(() => {
+      if (runId !== probeRunId) return;
+      updateShowDropdown(); applyShowFilter();
+    });
+  }, TRANSCODE_PROBE_DELAY_MS);
 }
 
-async function probeTranscoded(id) {
+async function probeTranscoded(id, runId) {
   // exact {id}.mp4 first (the standard streamable derivative)
-  if (await probeMp4(`${CONFIG.DL_BASE}${id}/${encodeURIComponent(id + '.mp4')}`)) return true;
+  if (await probeMp4(`${CONFIG.DL_BASE}${id}/${encodeURIComponent(id + '.mp4')}`, runId)) return true;
+  if (runId !== probeRunId) return true;
   // rare: derivative under a different name — check the file list once
   try {
     const res = await fetch(`${CONFIG.API_META}${id}`);
@@ -626,20 +637,22 @@ async function probeTranscoded(id) {
   } catch { return false; }
 }
 
-function probeMp4(url) {
+function probeMp4(url, runId) {
   return new Promise(resolve => {
     const v = document.createElement('video');
     v.preload = 'metadata';
     let done = false;
     const finish = (ok) => {
       if (done) return; done = true;
-      v.removeAttribute('src'); v.load(); v.remove(); // abort immediately on success
+      clearTimeout(timer); clearInterval(watcher);
+      v.removeAttribute('src'); v.load(); v.remove(); // abort immediately
       resolve(ok);
     };
     const timer = setTimeout(() => finish(true), TRANSCODE_PROBE_TIMEOUT_MS); // fail open
-    v.addEventListener('loadedmetadata', () => { clearTimeout(timer); finish(true); });
-    v.addEventListener('canplay', () => { clearTimeout(timer); finish(true); });
-    v.addEventListener('error', () => { clearTimeout(timer); finish(false); });
+    const watcher = setInterval(() => { if (runId !== probeRunId) finish(true); }, 500); // search moved on: abort
+    v.addEventListener('loadedmetadata', () => finish(true));
+    v.addEventListener('canplay', () => finish(true));
+    v.addEventListener('error', () => finish(false));
     v.src = url;
   });
 }
