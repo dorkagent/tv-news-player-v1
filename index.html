@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TV News Archive</title>
+<link rel="preconnect" href="https://archive.org">
+<link rel="dns-prefetch" href="https://archive.org">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
 :root { --bg-main: #0b0f1a; --accent: #2563eb; }
 html, body { height: 100%; }
-body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: #f8fafc; overflow-x: hidden; }
-.mono { font-family: 'JetBrains Mono', monospace; }
+body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background-color: var(--bg-main); color: #f8fafc; overflow-x: hidden; }
+.mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
 #search-view { scrollbar-width: thin; scrollbar-color: #334155 var(--bg-main); }
 #search-view::-webkit-scrollbar { width: 8px; }
 #search-view::-webkit-scrollbar-track { background: var(--bg-main); }
@@ -18,7 +19,7 @@ body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color
 .card:hover .thumb-img { transform: scale(1.06); }
 /* low-spec: skip rendering off-screen cards entirely; reserve ~340px so the scrollbar doesn't jump */
 .card { content-visibility: auto; contain-intrinsic-size: auto 340px; }
-.noise-item { opacity: .35; filter: grayscale(.5); }
+.noise-item { opacity: .35; }
 .hide-noise .noise-item { display: none !important; }
 .thumb-gradient { background: linear-gradient(0deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.45) 55%, rgba(0,0,0,0) 90%); }
 /* player */
@@ -39,7 +40,7 @@ body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color
 .chapter-btn { flex: 0 0 auto; }
 .chapter-btn.chapter-active { border-color: var(--accent) !important; color: #fff !important; background: #1e3a8a !important; }
 input[type="range"].vol { accent-color: var(--accent); width: 90px; }
-.api-bar { font-family: 'JetBrains Mono', monospace; }
+.api-bar { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
 select option { background: #0f172a; }
 /* skeleton shimmer */
 .skeleton { position: relative; overflow: hidden; background-color: #1e293b; }
@@ -122,7 +123,6 @@ a{color:inherit;text-decoration:none}
 .bg-slate-800{background-color:#1e293b}.bg-slate-800\/80{background-color:rgba(30,41,59,.8)}
 .bg-slate-900{background-color:#0f172a}.bg-slate-900\/95{background-color:rgba(15,23,42,.95)}
 .bg-slate-950{background-color:#020617}
-.backdrop-blur{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 /* borders */
 .border{border-width:1px;border-style:solid}.border-b{border-bottom-width:1px;border-style:solid}
 .border-blue-600{border-color:#2563eb}.border-slate-700{border-color:#334155}
@@ -165,7 +165,7 @@ a{color:inherit;text-decoration:none}
 <body class="h-screen flex flex-col hide-noise">
 
 <!-- ============ MAIN HEADER ============ -->
-<header id="main-header" class="flex-shrink-0 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-4 py-3 z-40">
+<header id="main-header" class="flex-shrink-0 bg-slate-900 border-b border-slate-800 px-4 py-3 z-40">
   <div class="max-w-[1600px] mx-auto flex flex-wrap items-center gap-3">
     <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="location.reload()" title="Reload">
       <div class="bg-blue-600 p-2 rounded-lg">
@@ -664,8 +664,8 @@ function toggleNoiseFilter() {
    but the files endpoint is ground truth, so we check that directly. 15/15
    sampled items across all 9 stations use the standard {id}.mp4 derive name, so
    no file-list fallback is needed. Still archive.org-only. */
-const TRANSCODE_PROBE_CONCURRENCY = 4; // tiny JSON fetches — far cheaper than the old video probes
-const TRANSCODE_PROBE_DELAY_MS = 1500; // let search results + thumbnails win the connection race first
+const TRANSCODE_PROBE_CONCURRENCY = 6; // tiny JSON fetches — far cheaper than the old video probes
+const TRANSCODE_PROBE_DELAY_MS = 1000; // let search results + thumbnails win the connection race first
 let probeRunId = 0; // bumped per search/toggle; stale runs abort instead of competing
 
 function probeTranscodes(docs) {
