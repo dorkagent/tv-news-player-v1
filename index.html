@@ -17,6 +17,8 @@ body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color
 #search-view::-webkit-scrollbar-thumb { background: #334155; border-radius: 8px; }
 .thumb-img { transition: transform .35s ease, opacity .3s ease; }
 .card:hover .thumb-img { transform: scale(1.06); }
+/* low-spec: skip rendering off-screen cards entirely; reserve ~340px so the scrollbar doesn't jump */
+.card { content-visibility: auto; contain-intrinsic-size: auto 340px; }
 .noise-item { opacity: .35; filter: grayscale(.5); }
 .hide-noise .noise-item { display: none !important; }
 .thumb-gradient { background: linear-gradient(0deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.45) 55%, rgba(0,0,0,0) 90%); }
@@ -51,8 +53,7 @@ select option { background: #0f172a; }
   opacity: 0; transform: scale(.85); transition: opacity .18s, transform .18s; pointer-events: none; }
 .card:hover .play-overlay, .card:focus-within .play-overlay { opacity: 1; transform: scale(1); }
 .po-circle { width: 3.5rem; height: 3.5rem; border-radius: 9999px; background: rgba(0,0,0,.55);
-  border: 1.5px solid rgba(255,255,255,.35); display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(2px); }
+  border: 1.5px solid rgba(255,255,255,.35); display: flex; align-items: center; justify-content: center; }
 @media (hover: none) { .play-overlay { opacity: 1; transform: none; } .po-circle { width: 2.5rem; height: 2.5rem; } }
 </style>
 </head>
@@ -231,6 +232,29 @@ const CONFIG = {
 const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="52%" fill="#334155" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle">TV NEWS ARCHIVE</text></svg>');
 
+/* low-spec: unload thumbnails far outside the viewport so long grids don't pin
+   decoded bitmaps in RAM. Restores the real image ~800px before it scrolls in. */
+const thumbObserver = ('IntersectionObserver' in window) ? new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    const img = e.target;
+    if (e.isIntersecting) {
+      if (img.dataset.unloaded) { delete img.dataset.unloaded; img.src = img.dataset.src; }
+    } else if (img.dataset.src && !img.dataset.unloaded) {
+      img.dataset.unloaded = '1';
+      img.src = PLACEHOLDER_IMG;
+    }
+  }
+}, { rootMargin: '800px 0px' }) : null;
+const observeThumb = (img) => {
+  img.dataset.src = img.dataset.src || img.src;
+  if (thumbObserver) thumbObserver.observe(img);
+};
+const thumbLoadFailed = (img) => {
+  img.onerror = null;
+  img.dataset.src = PLACEHOLDER_IMG; // don't restore a broken URL later
+  img.src = PLACEHOLDER_IMG;
+};
+
 const state = {
   page: 1,
   allItems: [],
@@ -333,7 +357,7 @@ function renderContinueWatching() {
     const inner = document.createElement('div');
     inner.className = 'relative aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900';
     inner.innerHTML = `
-      <img loading="lazy" src="${escapeHtml(en.thumb)}" alt="" class="thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100">
+      <img loading="lazy" decoding="async" src="${escapeHtml(en.thumb)}" data-src="${escapeHtml(en.thumb)}" alt="" class="thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100">
       <div class="thumb-gradient absolute inset-0 pointer-events-none"></div>
       <div class="play-overlay"><div class="po-circle"><svg class="w-6 h-6 ml-0.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
       <div class="absolute bottom-0 left-0 right-0 h-1 bg-white/10"><div class="h-full bg-blue-500" style="width:${pct}%"></div></div>
@@ -348,7 +372,8 @@ function renderContinueWatching() {
     x.onclick = (e) => { e.stopPropagation(); removeResume(en.id); };
     inner.appendChild(x);
     const img = inner.querySelector('img');
-    img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_IMG; };
+    img.onerror = () => thumbLoadFailed(img);
+    observeThumb(img);
     card.appendChild(inner);
     card.onclick = () => openPlayer(en.id, en.title, en.pos);
     row.appendChild(card);
@@ -483,10 +508,12 @@ function renderItems(docs) {
 
     const img = document.createElement('img');
     img.loading = 'lazy';
+    img.decoding = 'async';
     img.alt = '';
     img.className = 'thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100';
     img.src = `https://archive.org/services/img/${doc.identifier}`;
-    img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_IMG; };
+    img.onerror = () => thumbLoadFailed(img);
+    observeThumb(img);
     thumb.appendChild(img);
 
     const grad = document.createElement('div');
@@ -841,6 +868,7 @@ function handoff() {
   }
 }
 
+let lastUiSecond = -1; // low-spec: only repaint progress UI when the displayed second changes
 function onTimeUpdate(e) {
   if (e.target !== state.activeEl || !state.isPlayerOpen) return;
   const v = state.activeEl;
@@ -851,10 +879,14 @@ function onTimeUpdate(e) {
     // Handing off at timeLeft < 0.4 would clip the final ~0.4s of every slice.
   }
   const g = currentGlobalTime();
-  const pct = state.duration ? (g / state.duration) * 100 : 0;
-  $('progress-fill').style.width = `${pct}%`;
-  $('progress-knob').style.left = `${pct}%`;
-  $('timestamp-ui').textContent = `${formatTime(g)} / ${formatTime(state.duration)}`;
+  const sec = Math.floor(g);
+  if (sec !== lastUiSecond) {
+    lastUiSecond = sec;
+    const pct = state.duration ? (g / state.duration) * 100 : 0;
+    $('progress-fill').style.width = `${pct}%`;
+    $('progress-knob').style.left = `${pct}%`;
+    $('timestamp-ui').textContent = `${formatTime(g)} / ${formatTime(state.duration)}`;
+  }
   if (g - state.lastSave > 15) { state.lastSave = g; saveResumePoint(); }
 }
 
@@ -964,6 +996,7 @@ function hideError() {
 // reset time/progress UI so a new or failed session never shows a stale timestamp
 function resetPlayerUI() {
   state.duration = 0;
+  lastUiSecond = -1;
   $('timestamp-ui').textContent = `${formatTime(0)} / ${formatTime(0)}`;
   $('progress-fill').style.width = '0%';
   $('progress-knob').style.left = '0%';
