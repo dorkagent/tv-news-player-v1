@@ -657,23 +657,21 @@ function toggleNoiseFilter() {
 }
 
 /* Clean Feed transcode check: hide broadcasts whose mp4 hasn't been derived yet.
-   archive.org's download host sends no CORS headers, so fetch() can't read a
-   status — but a detached <video> element fires loadedmetadata/canplay on
-   success and error on 404 without needing CORS. Still archive.org-only. */
-const TRANSCODE_PROBE_CONCURRENCY = 2; // keep low: probes share archive.org's per-host connection pool with search, thumbs, and video
-const TRANSCODE_PROBE_TIMEOUT_MS = 10000;
-const TRANSCODE_RECENT_MS = 4 * 3600 * 1000; // derives usually finish within an hour or two; older items are long done
-const TRANSCODE_PROBE_DELAY_MS = 2500; // let search results + thumbnails win the connection race first
-let probeRunId = 0; // bumped per search; stale runs abort instead of competing
+   Detection: the metadata "files" endpoint answers for the exact {id}.mp4 with a
+   tiny CORS-enabled JSON (~100-500 bytes) — {"result":{...}} when derived,
+   {"error":"File ... not found"} when not. Verified Sep 2026: a missing
+   thumbnail (services/img 302 -> notfound2x.png) does correlate with no mp4 yet,
+   but the files endpoint is ground truth, so we check that directly. 15/15
+   sampled items across all 9 stations use the standard {id}.mp4 derive name, so
+   no file-list fallback is needed. Still archive.org-only. */
+const TRANSCODE_PROBE_CONCURRENCY = 4; // tiny JSON fetches — far cheaper than the old video probes
+const TRANSCODE_PROBE_DELAY_MS = 1500; // let search results + thumbnails win the connection race first
+let probeRunId = 0; // bumped per search/toggle; stale runs abort instead of competing
 
 function probeTranscodes(docs) {
   if (!state.filterNoise) return;
   const runId = ++probeRunId;
-  const queue = docs.filter(d => {
-    if (state.transcodeCache.has(d.identifier)) return false;
-    const t = Date.parse(d.publicdate || '');
-    return !t || (Date.now() - t) < TRANSCODE_RECENT_MS;
-  });
+  const queue = docs.filter(d => !state.transcodeCache.has(d.identifier));
   if (!queue.length) return;
   setTimeout(() => {
     if (runId !== probeRunId || !state.filterNoise) return;
@@ -681,8 +679,9 @@ function probeTranscodes(docs) {
     const workers = Array.from({ length: Math.min(TRANSCODE_PROBE_CONCURRENCY, queue.length) }, async () => {
       while (i < queue.length && runId === probeRunId) {
         const doc = queue[i++];
-        const ok = await probeTranscoded(doc.identifier, runId);
+        const ok = await probeTranscoded(doc.identifier);
         if (runId !== probeRunId) return; // a newer search started; drop everything
+        if (ok === null) continue; // network failure (unknown) — fail open, don't cache
         state.transcodeCache.set(doc.identifier, ok);
         if (!ok && state.filterNoise) markUntranscoded(doc.identifier);
       }
@@ -694,37 +693,15 @@ function probeTranscodes(docs) {
   }, TRANSCODE_PROBE_DELAY_MS);
 }
 
-async function probeTranscoded(id, runId) {
-  // exact {id}.mp4 first (the standard streamable derivative)
-  if (await probeMp4(`${CONFIG.DL_BASE}${id}/${encodeURIComponent(id + '.mp4')}`, runId)) return true;
-  if (runId !== probeRunId) return true;
-  // rare: derivative under a different name — check the file list once
+// Ground truth for "is this broadcast playable": the item's file catalog.
+// Returns true (mp4 derived), false (not derived), null (network failure — unknown).
+async function probeTranscoded(id) {
   try {
-    const res = await fetch(`${CONFIG.API_META}${id}`);
-    if (!res.ok) return false;
+    const res = await fetch(`${CONFIG.API_META}${id}/files/${encodeURIComponent(id + '.mp4')}`);
+    if (!res.ok) return null;
     const data = await res.json();
-    return (data.files || []).some(f => f.name.endsWith('.mp4') && !f.name.toLowerCase().includes('thumb'));
-  } catch { return false; }
-}
-
-function probeMp4(url, runId) {
-  return new Promise(resolve => {
-    const v = document.createElement('video');
-    v.preload = 'metadata';
-    let done = false;
-    const finish = (ok) => {
-      if (done) return; done = true;
-      clearTimeout(timer); clearInterval(watcher);
-      v.removeAttribute('src'); v.load(); v.remove(); // abort immediately
-      resolve(ok);
-    };
-    const timer = setTimeout(() => finish(true), TRANSCODE_PROBE_TIMEOUT_MS); // fail open
-    const watcher = setInterval(() => { if (runId !== probeRunId) finish(true); }, 500); // search moved on: abort
-    v.addEventListener('loadedmetadata', () => finish(true));
-    v.addEventListener('canplay', () => finish(true));
-    v.addEventListener('error', () => finish(false));
-    v.src = url;
-  });
+    return !!(data && data.result);
+  } catch { return null; }
 }
 
 function markUntranscoded(id) {
