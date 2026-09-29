@@ -106,13 +106,6 @@ select option { background: #0f172a; }
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
       </button>
     </div>
-    <div id="cw-section" class="hidden mb-10">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-sm font-black uppercase tracking-widest text-slate-300">Continue watching</h3>
-        <button onclick="clearResume()" class="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors">Clear all</button>
-      </div>
-      <div id="cw-row" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5"></div>
-    </div>
     <div id="results-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5"></div>
     <div id="empty-state" class="hidden py-24 text-center text-slate-500 text-xs font-black uppercase tracking-widest">No broadcasts found</div>
     <div id="pagination" class="mt-10 mb-4 hidden text-center">
@@ -272,10 +265,7 @@ const state = {
   stagerReady: false,
   loadToken: 0,        // guards against stacked load listeners
   volume: 1,
-  muted: false,
-  // resume
-  activeTitle: '',
-  lastSave: 0
+  muted: false
 };
 
 /* ================= HELPERS ================= */
@@ -298,7 +288,6 @@ window.addEventListener('DOMContentLoaded', () => {
     v.addEventListener('error', onVideoError);
   }
   renderStations();
-  renderContinueWatching();
   resetAndSearch();
   $('progress-track').addEventListener('click', handleSeek);
   document.addEventListener('keydown', onKeyDown);
@@ -319,68 +308,6 @@ function onKeyDown(e) {
   else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
   else if (e.key === 'm' || e.key === 'M') toggleMute();
 }
-
-/* ================= CONTINUE WATCHING ================= */
-const RESUME_KEY = 'tvnap.resume.v1';
-function loadResume() {
-  try { return JSON.parse(localStorage.getItem(RESUME_KEY)) || {}; } catch { return {}; }
-}
-function saveResume(map) {
-  try { localStorage.setItem(RESUME_KEY, JSON.stringify(map)); } catch {}
-}
-function saveResumePoint() {
-  if (!state.isPlayerOpen || !state.activeId || !state.duration) return;
-  const g = currentGlobalTime();
-  if (g < 10) return;
-  const map = loadResume();
-  if (g / state.duration >= 0.95) delete map[state.activeId]; // finished: drop it
-  else map[state.activeId] = {
-    id: state.activeId, title: state.activeTitle || state.activeId,
-    pos: Math.floor(g), dur: Math.floor(state.duration),
-    thumb: `https://archive.org/services/img/${state.activeId}`,
-    updated: Date.now()
-  };
-  saveResume(map);
-}
-function renderContinueWatching() {
-  const sec = $('cw-section'), row = $('cw-row');
-  if (!sec || !row) return;
-  const entries = Object.values(loadResume()).sort((a, b) => b.updated - a.updated).slice(0, 8);
-  if (!entries.length) { sec.classList.add('hidden'); return; }
-  sec.classList.remove('hidden');
-  row.innerHTML = '';
-  entries.forEach(en => {
-    const m = parseMeta(en.title || '', en.id);
-    const pct = en.dur ? Math.min(100, (en.pos / en.dur) * 100) : 0;
-    const card = document.createElement('div');
-    card.className = 'card group cursor-pointer';
-    const inner = document.createElement('div');
-    inner.className = 'relative aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900';
-    inner.innerHTML = `
-      <img loading="lazy" decoding="async" src="${escapeHtml(en.thumb)}" data-src="${escapeHtml(en.thumb)}" alt="" class="thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100">
-      <div class="thumb-gradient absolute inset-0 pointer-events-none"></div>
-      <div class="play-overlay"><div class="po-circle"><svg class="w-6 h-6 ml-0.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
-      <div class="absolute bottom-0 left-0 right-0 h-1 bg-white/10"><div class="h-full bg-blue-500" style="width:${pct}%"></div></div>
-      <div class="absolute bottom-3 left-2 right-2 pointer-events-none">
-        <div class="text-[11px] font-black text-white uppercase leading-tight line-clamp-2">${escapeHtml(m.show)}</div>
-        <div class="text-[10px] font-bold text-blue-400 mono mt-0.5">RESUME FROM ${formatTime(en.pos)}</div>
-      </div>`;
-    const x = document.createElement('button');
-    x.className = 'absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-slate-300 text-sm font-black leading-none hover:text-white hover:bg-black transition-colors';
-    x.title = 'Remove';
-    x.textContent = '×';
-    x.onclick = (e) => { e.stopPropagation(); removeResume(en.id); };
-    inner.appendChild(x);
-    const img = inner.querySelector('img');
-    img.onerror = () => thumbLoadFailed(img);
-    observeThumb(img);
-    card.appendChild(inner);
-    card.onclick = () => openPlayer(en.id, en.title, en.pos);
-    row.appendChild(card);
-  });
-}
-function removeResume(id) { const map = loadResume(); delete map[id]; saveResume(map); renderContinueWatching(); }
-function clearResume() { saveResume({}); renderContinueWatching(); }
 
 /* ================= SEARCH ================= */
 function renderStations() {
@@ -698,11 +625,9 @@ const segUrl = (start) => {
 };
 const currentGlobalTime = () => state.currentStart + (state.activeEl?.currentTime || 0);
 
-async function openPlayer(id, title, startAt = 0) {
+async function openPlayer(id, title) {
   state.activeId = id;
-  state.activeTitle = title || id;
   state.isPlayerOpen = true;
-  state.lastSave = 0;
   history.pushState({ playerOpen: true }, '');
 
   const m = parseMeta(title, id);
@@ -734,8 +659,7 @@ async function openPlayer(id, title, startAt = 0) {
     state.duration = parseFloat(videoFile.length) || 0;
     if (!state.duration) { showError('This broadcast has no duration metadata, so it cannot be segmented.'); return; }
     buildChapters();
-    if (startAt > 5) seekAbsolute(startAt);
-    else playSegment(0, 0);
+    playSegment(0, 0);
   } catch (e) {
     console.error(e);
     showError('Could not load this broadcast. Check your connection and try again.');
@@ -887,7 +811,6 @@ function onTimeUpdate(e) {
     $('progress-knob').style.left = `${pct}%`;
     $('timestamp-ui').textContent = `${formatTime(g)} / ${formatTime(state.duration)}`;
   }
-  if (g - state.lastSave > 15) { state.lastSave = g; saveResumePoint(); }
 }
 
 function onEnded(e) {
@@ -909,7 +832,7 @@ function togglePlayPause() {
   const v = state.activeEl;
   if (!v || !v.getAttribute('src')) return;
   if (v.paused) { v.play().catch(showResumeHint); updatePlayUI(true); }
-  else { v.pause(); updatePlayUI(false); saveResumePoint(); }
+  else { v.pause(); updatePlayUI(false); }
 }
 
 function updatePlayUI(isPlaying) {
@@ -1008,7 +931,6 @@ function goBack() {
 }
 
 function closePlayer(triggerHistory = true) {
-  saveResumePoint();
   resetEngine();
   state.isPlayerOpen = false;
   state.activeId = null;
