@@ -196,7 +196,7 @@ const CONFIG = {
   STATIONS: {
     "CNNW": "CNN", "FOXNEWSW": "FOX NEWS", "MSNOW": "MSNBC", "CNBC": "CNBC",
     "BLOOMBERG": "BLOOMBERG", "FBC": "FOX BIZ", "COM": "COMEDY",
-    "KNTV": "NBC Bay Area", "KGO": "ABC7 Bay Area", "KPIX": "CBS Bay Area", "KQED": "PBS Bay Area"
+    "CSPAN": "C-SPAN", "CSPAN2": "C-SPAN2"
   }
 };
 const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
@@ -340,7 +340,7 @@ function parseMeta(fullTitle) {
   const stationId = stationPart.split(' ')[0].replace('TV-', '');
   const channelLabel = CONFIG.STATIONS[stationId] || 'TV';
   const lowTitle = fullTitle.toLowerCase();
-  const noiseKeywords = ['bay area', 'abc7', 'kpix', 'kntv', 'kgo', 'kqed'];
+  const noiseKeywords = [];
   const isNoise = (channelLabel === 'TV') || noiseKeywords.some(k => lowTitle.includes(k));
 
   let dateStr = '', timeStr = '';
