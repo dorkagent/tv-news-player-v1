@@ -175,7 +175,7 @@ select option { background: #0f172a; }
       </div>
     </div>
 
-    <div class="mt-4 mb-2 flex items-center justify-between">
+    <div id="chapters-head" class="mt-4 mb-2 flex items-center justify-between">
       <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Chapters</span>
       <span id="seg-count" class="text-[10px] font-bold text-slate-600 mono"></span>
     </div>
@@ -528,6 +528,8 @@ function resetEngine() {
 function buildChapters() {
   const list = $('seg-list');
   list.innerHTML = '';
+  $('chapters-head').style.display = '';
+  list.style.display = '';
   let count = 0;
   // FIX: only emit buttons while start < duration (no dead button at exact multiples)
   for (let start = 0; start < state.duration; start += CONFIG.SEGMENT_LENGTH) {
@@ -637,7 +639,8 @@ function onTimeUpdate(e) {
   if (v.duration > 0) {
     const timeLeft = v.duration - v.currentTime;
     if (!v.paused && timeLeft < CONFIG.STAGE_AHEAD_SECONDS) stageNext();
-    if (!v.paused && timeLeft < 0.4) { handoff(); return; }
+    // NOTE: the swap happens on 'ended' (onEnded -> handoff), never here.
+    // Handing off at timeLeft < 0.4 would clip the final ~0.4s of every slice.
   }
   const g = currentGlobalTime();
   const pct = state.duration ? (g / state.duration) * 100 : 0;
@@ -672,7 +675,8 @@ function updatePlayUI(isPlaying) {
   $('ctrl-play-icon').style.display = isPlaying ? 'none' : '';
   $('ctrl-pause-icon').style.display = isPlaying ? '' : 'none';
   const big = $('big-play-btn');
-  if (isPlaying) { big.style.display = 'none'; }
+  const errVisible = !$('player-error').classList.contains('hidden');
+  if (isPlaying || errVisible) { big.style.display = 'none'; }
   else {
     big.style.display = 'flex';
     $('big-play-icon').style.display = '';
@@ -738,6 +742,8 @@ function showError(msg) {
   const e = $('player-error');
   e.classList.remove('hidden');
   e.classList.add('flex');
+  $('chapters-head').style.display = 'none';
+  $('seg-list').style.display = 'none';
   updatePlayUI(false);
 }
 function hideError() {
