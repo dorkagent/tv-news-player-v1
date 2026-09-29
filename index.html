@@ -40,6 +40,27 @@ body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color
 input[type="range"].vol { accent-color: var(--accent); width: 90px; }
 .api-bar { font-family: 'JetBrains Mono', monospace; }
 select option { background: #0f172a; }
+/* skeleton shimmer */
+.skeleton { position: relative; overflow: hidden; background-color: #1e293b; }
+.skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent);
+  animation: shimmer 1.4s infinite; }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+/* card play overlay */
+.play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transform: scale(.85); transition: opacity .18s, transform .18s; pointer-events: none; }
+.card:hover .play-overlay, .card:focus-within .play-overlay { opacity: 1; transform: scale(1); }
+.po-circle { width: 3.5rem; height: 3.5rem; border-radius: 9999px; background: rgba(0,0,0,.55);
+  border: 1.5px solid rgba(255,255,255,.35); display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px); }
+@media (hover: none) { .play-overlay { opacity: 1; transform: none; } .po-circle { width: 2.5rem; height: 2.5rem; } }
+/* transcript */
+.tcue { display: flex; gap: .75rem; padding: .5rem .75rem; cursor: pointer; align-items: baseline; }
+.tcue:hover { background: rgba(59,130,246,.08); }
+.tcue.tcue-active { background: rgba(59,130,246,.16); }
+.tcue-time { flex-shrink: 0; font-size: 10px; font-weight: 700; color: #60a5fa; font-family: 'JetBrains Mono', monospace; }
+.tcue-text { font-size: 13px; line-height: 1.45; color: #cbd5e1; }
+.tcue.tcue-active .tcue-text { color: #fff; }
 </style>
 </head>
 <body class="h-screen flex flex-col hide-noise">
@@ -91,11 +112,14 @@ select option { background: #0f172a; }
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
       </button>
     </div>
-    <div id="results-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5"></div>
-    <div id="loader" class="py-20 text-center hidden">
-      <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-500/20 border-t-blue-500"></div>
-      <div class="mt-4 text-xs font-black uppercase tracking-widest text-slate-500">Loading broadcasts</div>
+    <div id="cw-section" class="hidden mb-10">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-black uppercase tracking-widest text-slate-300">Continue watching</h3>
+        <button onclick="clearResume()" class="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors">Clear all</button>
+      </div>
+      <div id="cw-row" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5"></div>
     </div>
+    <div id="results-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5"></div>
     <div id="empty-state" class="hidden py-24 text-center text-slate-500 text-xs font-black uppercase tracking-widest">No broadcasts found</div>
     <div id="pagination" class="mt-10 mb-4 hidden text-center">
       <button onclick="loadMore()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-10 py-3 hover:bg-slate-700 transition-colors">Load more</button>
@@ -180,6 +204,14 @@ select option { background: #0f172a; }
       <span id="seg-count" class="text-[10px] font-bold text-slate-600 mono"></span>
     </div>
     <div id="seg-list" class="chapter-strip flex gap-2 overflow-x-auto pb-3"></div>
+
+    <div id="transcript-head" class="mt-6 mb-2 hidden items-center justify-between gap-3">
+      <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Transcript</span>
+      <input id="transcript-search" type="text" placeholder="Search transcript..."
+        class="w-56 max-w-[60%] bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-blue-500">
+    </div>
+    <div id="transcript-status" class="hidden text-[11px] text-slate-500 italic py-2"></div>
+    <div id="transcript-list" class="hidden max-h-80 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/60"></div>
     <div class="h-6"></div>
   </div>
 </div>
@@ -197,6 +229,18 @@ const CONFIG = {
     "CNNW": "CNN", "FOXNEWSW": "FOX NEWS", "MSNOW": "MSNBC", "CNBC": "CNBC",
     "BLOOMBERG": "BLOOMBERG", "FBC": "FOX BIZ", "COM": "COMEDY",
     "CSPAN": "C-SPAN", "CSPAN2": "C-SPAN2"
+  },
+  // brand colors for station badges (bg, fg)
+  STATION_STYLE: {
+    "CNNW":     ["#CC0000", "#ffffff"],
+    "FOXNEWSW": ["#1D4ED8", "#ffffff"],
+    "MSNOW":    ["#7C3AED", "#ffffff"],
+    "CNBC":     ["#0284C7", "#ffffff"],
+    "BLOOMBERG":["#B45309", "#ffffff"],
+    "FBC":      ["#15803D", "#ffffff"],
+    "COM":      ["#EAB308", "#111827"],
+    "CSPAN":    ["#6B7280", "#ffffff"],
+    "CSPAN2":   ["#4B5563", "#ffffff"]
   }
 };
 const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
@@ -218,7 +262,13 @@ const state = {
   stagerReady: false,
   loadToken: 0,        // guards against stacked load listeners
   volume: 1,
-  muted: false
+  muted: false,
+  // resume + transcript
+  activeTitle: '',
+  lastSave: 0,
+  cues: [],
+  activeCue: -1,
+  transcriptToken: 0
 };
 
 /* ================= HELPERS ================= */
@@ -241,7 +291,9 @@ window.addEventListener('DOMContentLoaded', () => {
     v.addEventListener('error', onVideoError);
   }
   renderStations();
+  renderContinueWatching();
   resetAndSearch();
+  $('transcript-search').addEventListener('input', e => renderCues(e.target.value));
   $('progress-track').addEventListener('click', handleSeek);
   document.addEventListener('keydown', onKeyDown);
   // close station dropdown on outside click
@@ -260,6 +312,150 @@ function onKeyDown(e) {
   else if (e.key === 'ArrowLeft') skipSeconds(-10);
   else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
   else if (e.key === 'm' || e.key === 'M') toggleMute();
+}
+
+/* ================= CONTINUE WATCHING ================= */
+const RESUME_KEY = 'tvnap.resume.v1';
+function loadResume() {
+  try { return JSON.parse(localStorage.getItem(RESUME_KEY)) || {}; } catch { return {}; }
+}
+function saveResume(map) {
+  try { localStorage.setItem(RESUME_KEY, JSON.stringify(map)); } catch {}
+}
+function saveResumePoint() {
+  if (!state.isPlayerOpen || !state.activeId || !state.duration) return;
+  const g = currentGlobalTime();
+  if (g < 10) return;
+  const map = loadResume();
+  if (g / state.duration >= 0.95) delete map[state.activeId]; // finished: drop it
+  else map[state.activeId] = {
+    id: state.activeId, title: state.activeTitle || state.activeId,
+    pos: Math.floor(g), dur: Math.floor(state.duration),
+    thumb: `https://archive.org/services/img/${state.activeId}`,
+    updated: Date.now()
+  };
+  saveResume(map);
+}
+function renderContinueWatching() {
+  const sec = $('cw-section'), row = $('cw-row');
+  if (!sec || !row) return;
+  const entries = Object.values(loadResume()).sort((a, b) => b.updated - a.updated).slice(0, 8);
+  if (!entries.length) { sec.classList.add('hidden'); return; }
+  sec.classList.remove('hidden');
+  row.innerHTML = '';
+  entries.forEach(en => {
+    const m = parseMeta(en.title || '', en.id);
+    const pct = en.dur ? Math.min(100, (en.pos / en.dur) * 100) : 0;
+    const card = document.createElement('div');
+    card.className = 'card group cursor-pointer';
+    const inner = document.createElement('div');
+    inner.className = 'relative aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900';
+    inner.innerHTML = `
+      <img loading="lazy" src="${escapeHtml(en.thumb)}" alt="" class="thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100">
+      <div class="thumb-gradient absolute inset-0 pointer-events-none"></div>
+      <div class="play-overlay"><div class="po-circle"><svg class="w-6 h-6 ml-0.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
+      <div class="absolute bottom-0 left-0 right-0 h-1 bg-white/10"><div class="h-full bg-blue-500" style="width:${pct}%"></div></div>
+      <div class="absolute bottom-3 left-2 right-2 pointer-events-none">
+        <div class="text-[11px] font-black text-white uppercase leading-tight line-clamp-2">${escapeHtml(m.show)}</div>
+        <div class="text-[10px] font-bold text-blue-400 mono mt-0.5">RESUME FROM ${formatTime(en.pos)}</div>
+      </div>`;
+    const x = document.createElement('button');
+    x.className = 'absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-slate-300 text-sm font-black leading-none hover:text-white hover:bg-black transition-colors';
+    x.title = 'Remove';
+    x.textContent = '×';
+    x.onclick = (e) => { e.stopPropagation(); removeResume(en.id); };
+    inner.appendChild(x);
+    const img = inner.querySelector('img');
+    img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_IMG; };
+    card.appendChild(inner);
+    card.onclick = () => openPlayer(en.id, en.title, en.pos);
+    row.appendChild(card);
+  });
+}
+function removeResume(id) { const map = loadResume(); delete map[id]; saveResume(map); renderContinueWatching(); }
+function clearResume() { saveResume({}); renderContinueWatching(); }
+
+/* ================= TRANSCRIPT ================= */
+function parseSRT(text) {
+  const cues = [];
+  for (const b of text.replace(/\r/g, '').split(/\n\s*\n/)) {
+    const lines = b.trim().split('\n');
+    if (lines.length < 2) continue;
+    const m = lines[1].match(/(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)/);
+    if (!m) continue;
+    const start = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
+    const txt = lines.slice(2).join(' ').replace(/<[^>]+>/g, '').trim();
+    if (!txt) continue;
+    if (cues.length && cues[cues.length - 1].text === txt) continue; // captions repeat lines
+    cues.push({ start, text: txt });
+  }
+  return cues;
+}
+
+async function loadTranscript(id, files) {
+  const token = ++state.transcriptToken;
+  const head = $('transcript-head'), list = $('transcript-list'), status = $('transcript-status');
+  head.classList.add('hidden'); head.classList.remove('flex');
+  list.classList.add('hidden'); status.classList.add('hidden');
+  list.innerHTML = ''; $('transcript-search').value = '';
+  state.cues = []; state.activeCue = -1;
+  const srtFile = files.find(f => f.name.endsWith('.cc5.srt')) || files.find(f => f.name.endsWith('.align.srt'));
+  if (!srtFile) return; // no captions: panel stays hidden
+  try {
+    const res = await fetch(`${CONFIG.DL_BASE}${id}/${encodeURIComponent(srtFile.name)}`);
+    if (token !== state.transcriptToken) return; // user moved on
+    if (!res.ok) throw new Error(`srt HTTP ${res.status}`);
+    state.cues = parseSRT(await res.text());
+    if (!state.cues.length) {
+      status.textContent = 'No captions available for this broadcast.';
+      status.classList.remove('hidden');
+      return;
+    }
+    renderCues('');
+    head.classList.remove('hidden'); head.classList.add('flex');
+    list.classList.remove('hidden');
+  } catch (e) {
+    console.error('transcript failed', e); // captions are optional: stay hidden
+  }
+}
+
+function renderCues(filter) {
+  const list = $('transcript-list');
+  list.innerHTML = '';
+  const q = (filter || '').toLowerCase();
+  state.cues.forEach((c, i) => {
+    if (q && !c.text.toLowerCase().includes(q)) return;
+    const row = document.createElement('div');
+    row.className = 'tcue'; row.dataset.cue = i;
+    const tm = document.createElement('button');
+    tm.className = 'tcue-time'; tm.textContent = formatTime(c.start);
+    tm.title = `Jump to ${formatTime(c.start)}`;
+    const tx = document.createElement('div');
+    tx.className = 'tcue-text'; tx.textContent = c.text;
+    row.appendChild(tm); row.appendChild(tx);
+    row.onclick = () => seekAbsolute(Math.max(0, c.start - 1));
+    list.appendChild(row);
+  });
+  state.activeCue = -1;
+}
+
+function highlightCue(g) {
+  if (!state.cues.length) return;
+  const list = $('transcript-list');
+  let lo = 0, hi = state.cues.length - 1, idx = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (state.cues[mid].start <= g) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
+  if (idx === state.activeCue) return;
+  state.activeCue = idx;
+  list.querySelectorAll('.tcue').forEach(el => el.classList.toggle('tcue-active', +el.dataset.cue === idx));
+  const active = list.querySelector('.tcue-active');
+  if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function hideTranscript() {
+  state.transcriptToken++;
+  state.cues = []; state.activeCue = -1;
+  for (const el of ['transcript-head', 'transcript-list', 'transcript-status']) $(el)?.classList.add('hidden');
+  $('transcript-head')?.classList.remove('flex');
 }
 
 /* ================= SEARCH ================= */
@@ -284,19 +480,34 @@ function renderStations() {
 const resetAndSearch = () => { state.page = 1; state.allItems = []; search(); };
 const loadMore = () => { state.page++; search(true); };
 
+function renderSkeletons(n, append = false) {
+  const grid = $('results-grid');
+  if (!append) grid.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    d.className = 'card skel';
+    d.innerHTML = `<div class="aspect-video rounded-xl skeleton"></div>
+      <div class="mt-2 h-3 rounded skeleton w-3/4"></div>
+      <div class="mt-1.5 h-2.5 rounded skeleton w-1/2"></div>`;
+    grid.appendChild(d);
+  }
+}
+function clearSkeletons() {
+  document.querySelectorAll('#results-grid .skel').forEach(e => e.remove());
+}
+
 async function search(append = false) {
   const grid = $('results-grid');
-  const loader = $('loader');
   const pag = $('pagination');
   const empty = $('empty-state');
-  if (!append) { grid.innerHTML = ''; pag.classList.add('hidden'); empty.classList.add('hidden'); }
-  loader.classList.remove('hidden');
+  if (!append) { pag.classList.add('hidden'); empty.classList.add('hidden'); }
+  renderSkeletons(append ? 6 : 12, append);
 
   const term = sanitizeTerm($('searchInput').value.trim());
   const channels = Array.from(document.querySelectorAll('.station-cb:checked')).map(c => `collection:${c.value}`);
 
   if (channels.length === 0) {
-    loader.classList.add('hidden');
+    clearSkeletons();
     empty.classList.remove('hidden');
     empty.textContent = 'No stations selected';
     return;
@@ -328,16 +539,18 @@ async function search(append = false) {
     console.error('Search failed', e);
     if (!append) { empty.classList.remove('hidden'); empty.textContent = 'Search failed — check connection and retry'; }
   } finally {
-    loader.classList.add('hidden');
+    clearSkeletons();
   }
 }
 
-function parseMeta(fullTitle) {
+function parseMeta(fullTitle, identifier = '') {
   const parts = fullTitle.split(/\s*:\s*/);
   const showName = (parts[0] || 'Unknown Show').trim();
   const stationPart = (parts[1] || '').trim();
   const metaBlock = parts.slice(2).join(' : ').trim();
-  const stationId = stationPart.split(' ')[0].replace('TV-', '');
+  // identifier prefix (e.g. CSPAN_2026...) is the reliable station key; title parsing is the fallback
+  let stationId = (identifier.split('_')[0] || '');
+  if (!CONFIG.STATIONS[stationId]) stationId = stationPart.split(' ')[0].replace('TV-', '');
   const channelLabel = CONFIG.STATIONS[stationId] || 'TV';
   const lowTitle = fullTitle.toLowerCase();
   const noiseKeywords = [];
@@ -351,13 +564,14 @@ function parseMeta(fullTitle) {
       timeStr = metaBlock.replace(dateStr, '').trim();
     } else { dateStr = metaBlock; }
   }
-  return { show: showName, channel: channelLabel, date: dateStr.toUpperCase(), time: timeStr.toUpperCase(), isNoise };
+  return { show: showName, channel: channelLabel, stationKey: CONFIG.STATIONS[stationId] ? stationId : '', date: dateStr.toUpperCase(), time: timeStr.toUpperCase(), isNoise };
 }
 
 function renderItems(docs) {
   const grid = $('results-grid');
+  clearSkeletons(); // remove skeleton placeholders
   docs.forEach(doc => {
-    const m = parseMeta(doc.title || '');
+    const m = parseMeta(doc.title || '', doc.identifier);
     state.allItems.push({ doc, meta: m });
 
     const card = document.createElement('div');
@@ -380,9 +594,16 @@ function renderItems(docs) {
     thumb.appendChild(grad);
 
     const badge = document.createElement('div');
-    badge.className = 'absolute top-2 left-2 bg-blue-600 px-1.5 py-0.5 rounded text-[9px] font-black text-white uppercase tracking-tight';
+    badge.className = 'absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tight';
+    const [bg, fg] = CONFIG.STATION_STYLE[m.stationKey] || ['#2563eb', '#ffffff'];
+    badge.style.backgroundColor = bg; badge.style.color = fg;
     badge.textContent = m.channel;
     thumb.appendChild(badge);
+
+    const po = document.createElement('div');
+    po.className = 'play-overlay';
+    po.innerHTML = '<div class="po-circle"><svg class="w-6 h-6 ml-0.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>';
+    thumb.appendChild(po);
 
     if (m.time) {
       const tb = document.createElement('div');
@@ -470,21 +691,27 @@ const segUrl = (start) => {
 };
 const currentGlobalTime = () => state.currentStart + (state.activeEl?.currentTime || 0);
 
-async function openPlayer(id, title) {
+async function openPlayer(id, title, startAt = 0) {
   state.activeId = id;
+  state.activeTitle = title || id;
   state.isPlayerOpen = true;
+  state.lastSave = 0;
   history.pushState({ playerOpen: true }, '');
 
-  const m = parseMeta(title);
+  const m = parseMeta(title, id);
   $('player-view').classList.remove('hidden');
   $('main-header').classList.add('hidden');
   document.body.style.overflow = 'hidden';
   $('p-title').textContent = m.show;
-  $('p-channel').textContent = m.channel;
+  const pc = $('p-channel');
+  pc.textContent = m.channel;
+  const [pbg, pfg] = CONFIG.STATION_STYLE[m.stationKey] || ['#2563eb', '#ffffff'];
+  pc.style.backgroundColor = pbg; pc.style.color = pfg;
   $('p-date-ui').textContent = m.date;
   $('p-time-ui').textContent = m.time;
   $('archive-source-link').href = `https://archive.org/details/${id}`;
   hideError();
+  hideTranscript();
 
   resetEngine();
   try {
@@ -500,7 +727,9 @@ async function openPlayer(id, title) {
     state.duration = parseFloat(videoFile.length) || 0;
     if (!state.duration) { showError('This broadcast has no duration metadata, so it cannot be segmented.'); return; }
     buildChapters();
-    playSegment(0, 0);
+    loadTranscript(id, files);
+    if (startAt > 5) seekAbsolute(startAt);
+    else playSegment(0, 0);
   } catch (e) {
     console.error(e);
     showError('Could not load this broadcast. Check your connection and try again.');
@@ -647,6 +876,8 @@ function onTimeUpdate(e) {
   $('progress-fill').style.width = `${pct}%`;
   $('progress-knob').style.left = `${pct}%`;
   $('timestamp-ui').textContent = `${formatTime(g)} / ${formatTime(state.duration)}`;
+  if (g - state.lastSave > 15) { state.lastSave = g; saveResumePoint(); }
+  highlightCue(g);
 }
 
 function onEnded(e) {
@@ -668,7 +899,7 @@ function togglePlayPause() {
   const v = state.activeEl;
   if (!v || !v.getAttribute('src')) return;
   if (v.paused) { v.play().catch(showResumeHint); updatePlayUI(true); }
-  else { v.pause(); updatePlayUI(false); }
+  else { v.pause(); updatePlayUI(false); saveResumePoint(); }
 }
 
 function updatePlayUI(isPlaying) {
@@ -744,6 +975,7 @@ function showError(msg) {
   e.classList.add('flex');
   $('chapters-head').style.display = 'none';
   $('seg-list').style.display = 'none';
+  hideTranscript();
   updatePlayUI(false);
 }
 function hideError() {
@@ -758,6 +990,8 @@ function goBack() {
 }
 
 function closePlayer(triggerHistory = true) {
+  saveResumePoint();
+  hideTranscript();
   resetEngine();
   state.isPlayerOpen = false;
   state.activeId = null;
@@ -766,6 +1000,7 @@ function closePlayer(triggerHistory = true) {
   document.body.style.overflow = '';
   if (document.fullscreenElement) document.exitFullscreen?.();
   if (triggerHistory && history.state?.playerOpen) history.back();
+  renderContinueWatching();
 }
 </script>
 </body>
