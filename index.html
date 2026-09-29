@@ -551,13 +551,29 @@ function buildCard(doc, m) {
     const thumb = document.createElement('div');
     thumb.className = 'relative aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900';
 
+    // Skeleton shimmer behind the thumbnail: thumbnails are tiny (~2-8KB) but
+    // each costs a redirect + TTFB, so this keeps the card from looking broken
+    // while the image arrives. Fades out on load (or on error -> placeholder).
+    const ph = document.createElement('div');
+    ph.className = 'absolute inset-0 skeleton';
+    thumb.appendChild(ph);
+    let phGone = false;
+    const clearPh = () => {
+      if (phGone) return;
+      phGone = true;
+      ph.style.transition = 'opacity .3s ease';
+      ph.style.opacity = '0';
+      setTimeout(() => ph.remove(), 320);
+    };
+
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.decoding = 'async';
     img.alt = '';
     img.className = 'thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100';
+    img.onload = clearPh;
+    img.onerror = () => { thumbLoadFailed(img); clearPh(); };
     img.src = `https://archive.org/services/img/${doc.identifier}`;
-    img.onerror = () => thumbLoadFailed(img);
     observeThumb(img);
     thumb.appendChild(img);
 
