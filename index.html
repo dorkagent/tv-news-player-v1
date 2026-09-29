@@ -54,13 +54,6 @@ select option { background: #0f172a; }
   border: 1.5px solid rgba(255,255,255,.35); display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(2px); }
 @media (hover: none) { .play-overlay { opacity: 1; transform: none; } .po-circle { width: 2.5rem; height: 2.5rem; } }
-/* transcript */
-.tcue { display: flex; gap: .75rem; padding: .5rem .75rem; cursor: pointer; align-items: baseline; }
-.tcue:hover { background: rgba(59,130,246,.08); }
-.tcue.tcue-active { background: rgba(59,130,246,.16); }
-.tcue-time { flex-shrink: 0; font-size: 10px; font-weight: 700; color: #60a5fa; font-family: 'JetBrains Mono', monospace; }
-.tcue-text { font-size: 13px; line-height: 1.45; color: #cbd5e1; }
-.tcue.tcue-active .tcue-text { color: #fff; }
 </style>
 </head>
 <body class="h-screen flex flex-col hide-noise">
@@ -204,14 +197,6 @@ select option { background: #0f172a; }
       <span id="seg-count" class="text-[10px] font-bold text-slate-600 mono"></span>
     </div>
     <div id="seg-list" class="chapter-strip flex gap-2 overflow-x-auto pb-3"></div>
-
-    <div id="transcript-head" class="mt-6 mb-2 hidden items-center justify-between gap-3">
-      <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Transcript</span>
-      <input id="transcript-search" type="text" placeholder="Search transcript..."
-        class="w-56 max-w-[60%] bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-blue-500">
-    </div>
-    <div id="transcript-status" class="hidden text-[11px] text-slate-500 italic py-2"></div>
-    <div id="transcript-list" class="hidden max-h-80 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/60"></div>
     <div class="h-6"></div>
   </div>
 </div>
@@ -263,12 +248,9 @@ const state = {
   loadToken: 0,        // guards against stacked load listeners
   volume: 1,
   muted: false,
-  // resume + transcript
+  // resume
   activeTitle: '',
-  lastSave: 0,
-  cues: [],
-  activeCue: -1,
-  transcriptToken: 0
+  lastSave: 0
 };
 
 /* ================= HELPERS ================= */
@@ -293,7 +275,6 @@ window.addEventListener('DOMContentLoaded', () => {
   renderStations();
   renderContinueWatching();
   resetAndSearch();
-  $('transcript-search').addEventListener('input', e => renderCues(e.target.value));
   $('progress-track').addEventListener('click', handleSeek);
   document.addEventListener('keydown', onKeyDown);
   // close station dropdown on outside click
@@ -374,89 +355,6 @@ function renderContinueWatching() {
 }
 function removeResume(id) { const map = loadResume(); delete map[id]; saveResume(map); renderContinueWatching(); }
 function clearResume() { saveResume({}); renderContinueWatching(); }
-
-/* ================= TRANSCRIPT ================= */
-function parseSRT(text) {
-  const cues = [];
-  for (const b of text.replace(/\r/g, '').split(/\n\s*\n/)) {
-    const lines = b.trim().split('\n');
-    if (lines.length < 2) continue;
-    const m = lines[1].match(/(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)/);
-    if (!m) continue;
-    const start = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
-    const txt = lines.slice(2).join(' ').replace(/<[^>]+>/g, '').trim();
-    if (!txt) continue;
-    if (cues.length && cues[cues.length - 1].text === txt) continue; // captions repeat lines
-    cues.push({ start, text: txt });
-  }
-  return cues;
-}
-
-async function loadTranscript(id, files) {
-  const token = ++state.transcriptToken;
-  const head = $('transcript-head'), list = $('transcript-list'), status = $('transcript-status');
-  head.classList.add('hidden'); head.classList.remove('flex');
-  list.classList.add('hidden'); status.classList.add('hidden');
-  list.innerHTML = ''; $('transcript-search').value = '';
-  state.cues = []; state.activeCue = -1;
-  const srtFile = files.find(f => f.name.endsWith('.cc5.srt')) || files.find(f => f.name.endsWith('.align.srt'));
-  if (!srtFile) return; // no captions: panel stays hidden
-  try {
-    const res = await fetch(`${CONFIG.DL_BASE}${id}/${encodeURIComponent(srtFile.name)}`);
-    if (token !== state.transcriptToken) return; // user moved on
-    if (!res.ok) throw new Error(`srt HTTP ${res.status}`);
-    state.cues = parseSRT(await res.text());
-    if (!state.cues.length) {
-      status.textContent = 'No captions available for this broadcast.';
-      status.classList.remove('hidden');
-      return;
-    }
-    renderCues('');
-    head.classList.remove('hidden'); head.classList.add('flex');
-    list.classList.remove('hidden');
-  } catch (e) {
-    console.error('transcript failed', e); // captions are optional: stay hidden
-  }
-}
-
-function renderCues(filter) {
-  const list = $('transcript-list');
-  list.innerHTML = '';
-  const q = (filter || '').toLowerCase();
-  state.cues.forEach((c, i) => {
-    if (q && !c.text.toLowerCase().includes(q)) return;
-    const row = document.createElement('div');
-    row.className = 'tcue'; row.dataset.cue = i;
-    const tm = document.createElement('button');
-    tm.className = 'tcue-time'; tm.textContent = formatTime(c.start);
-    tm.title = `Jump to ${formatTime(c.start)}`;
-    const tx = document.createElement('div');
-    tx.className = 'tcue-text'; tx.textContent = c.text;
-    row.appendChild(tm); row.appendChild(tx);
-    row.onclick = () => seekAbsolute(Math.max(0, c.start - 1));
-    list.appendChild(row);
-  });
-  state.activeCue = -1;
-}
-
-function highlightCue(g) {
-  if (!state.cues.length) return;
-  const list = $('transcript-list');
-  let lo = 0, hi = state.cues.length - 1, idx = -1;
-  while (lo <= hi) { const mid = (lo + hi) >> 1; if (state.cues[mid].start <= g) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
-  if (idx === state.activeCue) return;
-  state.activeCue = idx;
-  list.querySelectorAll('.tcue').forEach(el => el.classList.toggle('tcue-active', +el.dataset.cue === idx));
-  const active = list.querySelector('.tcue-active');
-  if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-}
-
-function hideTranscript() {
-  state.transcriptToken++;
-  state.cues = []; state.activeCue = -1;
-  for (const el of ['transcript-head', 'transcript-list', 'transcript-status']) $(el)?.classList.add('hidden');
-  $('transcript-head')?.classList.remove('flex');
-}
 
 /* ================= SEARCH ================= */
 function renderStations() {
@@ -711,7 +609,7 @@ async function openPlayer(id, title, startAt = 0) {
   $('p-time-ui').textContent = m.time;
   $('archive-source-link').href = `https://archive.org/details/${id}`;
   hideError();
-  hideTranscript();
+  resetPlayerUI();
 
   resetEngine();
   try {
@@ -727,7 +625,6 @@ async function openPlayer(id, title, startAt = 0) {
     state.duration = parseFloat(videoFile.length) || 0;
     if (!state.duration) { showError('This broadcast has no duration metadata, so it cannot be segmented.'); return; }
     buildChapters();
-    loadTranscript(id, files);
     if (startAt > 5) seekAbsolute(startAt);
     else playSegment(0, 0);
   } catch (e) {
@@ -877,7 +774,6 @@ function onTimeUpdate(e) {
   $('progress-knob').style.left = `${pct}%`;
   $('timestamp-ui').textContent = `${formatTime(g)} / ${formatTime(state.duration)}`;
   if (g - state.lastSave > 15) { state.lastSave = g; saveResumePoint(); }
-  highlightCue(g);
 }
 
 function onEnded(e) {
@@ -975,13 +871,20 @@ function showError(msg) {
   e.classList.add('flex');
   $('chapters-head').style.display = 'none';
   $('seg-list').style.display = 'none';
-  hideTranscript();
+  resetPlayerUI();
   updatePlayUI(false);
 }
 function hideError() {
   const e = $('player-error');
   e.classList.add('hidden');
   e.classList.remove('flex');
+}
+// reset time/progress UI so a new or failed session never shows a stale timestamp
+function resetPlayerUI() {
+  state.duration = 0;
+  $('timestamp-ui').textContent = `${formatTime(0)} / ${formatTime(0)}`;
+  $('progress-fill').style.width = '0%';
+  $('progress-knob').style.left = '0%';
 }
 
 function goBack() {
@@ -991,7 +894,6 @@ function goBack() {
 
 function closePlayer(triggerHistory = true) {
   saveResumePoint();
-  hideTranscript();
   resetEngine();
   state.isPlayerOpen = false;
   state.activeId = null;
