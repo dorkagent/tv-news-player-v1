@@ -145,6 +145,7 @@ a{color:inherit;text-decoration:none}
 .hover\:border-blue-500:hover{border-color:#3b82f6}
 .hover\:text-blue-400:hover{color:#60a5fa}.hover\:text-slate-300:hover{color:#cbd5e1}.hover\:text-white:hover{color:#fff}
 .hover\:scale-105:hover{transform:scale(1.05)}
+.hover\:underline:hover{text-decoration:underline}
 .focus\:border-blue-500:focus{border-color:#3b82f6}
 .focus\:ring-1:focus{box-shadow:0 0 0 1px #3b82f6}
 .focus\:ring-blue-500:focus{box-shadow:0 0 0 1px #3b82f6}
@@ -576,8 +577,19 @@ function renderItems(docs) {
     h4.className = 'text-sm font-black text-white uppercase leading-tight line-clamp-2';
     h4.textContent = m.show;
     const d = document.createElement('div');
-    d.className = 'text-[10px] font-bold text-slate-400 mt-1 mono italic opacity-80';
-    d.textContent = m.date;
+    d.className = 'text-[10px] font-bold text-slate-400 mt-1 mono italic opacity-80 flex items-center justify-between gap-2';
+    const dateSpan = document.createElement('span');
+    dateSpan.textContent = m.date;
+    const srcLink = document.createElement('a');
+    srcLink.href = `https://archive.org/details/${doc.identifier}`;
+    srcLink.target = '_blank';
+    srcLink.rel = 'noopener';
+    srcLink.title = 'View the original item on archive.org';
+    srcLink.setAttribute('aria-label', `Original archive.org page for ${m.show}`);
+    srcLink.className = 'shrink-0 text-blue-400 hover:text-blue-500 hover:underline';
+    srcLink.textContent = 'archive.org ↗';
+    srcLink.addEventListener('click', (e) => e.stopPropagation()); // don't open the player too
+    d.appendChild(dateSpan); d.appendChild(srcLink);
     cap.appendChild(h4); cap.appendChild(d);
     thumb.appendChild(cap);
 
