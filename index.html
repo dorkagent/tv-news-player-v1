@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TV News Archive</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
+:root { --bg-main: #0b0f1a; --accent: #2563eb; }
+html, body { height: 100%; }
+body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: #f8fafc; overflow-x: hidden; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+#search-view { scrollbar-width: thin; scrollbar-color: #334155 var(--bg-main); }
+#search-view::-webkit-scrollbar { width: 8px; }
+#search-view::-webkit-scrollbar-track { background: var(--bg-main); }
+#search-view::-webkit-scrollbar-thumb { background: #334155; border-radius: 8px; }
+.thumb-img { transition: transform .35s ease, opacity .3s ease; }
+.card:hover .thumb-img { transform: scale(1.06); }
+.noise-item { opacity: .35; filter: grayscale(.5); }
+.hide-noise .noise-item { display: none !important; }
+.thumb-gradient { background: linear-gradient(0deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.45) 55%, rgba(0,0,0,0) 90%); }
+/* player */
+#player-view { -webkit-overflow-scrolling: touch; }
+.vid-stack { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #1e293b; }
+.vid-stack video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; opacity: 0; pointer-events: none; transition: opacity .15s linear; }
+.vid-stack video.is-active { opacity: 1; pointer-events: auto; }
+.ctrl-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 12px 10px; background: linear-gradient(0deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,0) 100%); }
+.progress-track { height: 14px; display: flex; align-items: center; cursor: pointer; }
+.progress-rail { height: 5px; width: 100%; background: rgba(255,255,255,.22); border-radius: 3px; position: relative; }
+.progress-rail:hover { height: 7px; }
+.progress-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 3px; }
+.progress-knob { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; background: #fff; transform: translate(-50%,-50%) scale(0); transition: transform .15s; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.progress-track:hover .progress-knob { transform: translate(-50%,-50%) scale(1); }
+.chapter-strip { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+.chapter-strip::-webkit-scrollbar { height: 6px; }
+.chapter-strip::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+.chapter-btn { flex: 0 0 auto; }
+.chapter-btn.chapter-active { border-color: var(--accent) !important; color: #fff !important; background: #1e3a8a !important; }
+input[type="range"].vol { accent-color: var(--accent); width: 90px; }
+.api-bar { font-family: 'JetBrains Mono', monospace; }
+select option { background: #0f172a; }
+</style>
+</head>
+<body class="h-screen flex flex-col hide-noise">
+
+<!-- ============ MAIN HEADER ============ -->
+<header id="main-header" class="flex-shrink-0 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-4 py-3 z-40">
+  <div class="max-w-[1600px] mx-auto flex flex-wrap items-center gap-3">
+    <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="location.reload()" title="Reload">
+      <div class="bg-blue-600 p-2 rounded-lg">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      </div>
+      <h1 class="text-base font-black tracking-tight uppercase">TV News <span class="text-blue-500">Archive</span></h1>
+    </div>
+    <div class="flex-1 min-w-[180px] max-w-xl">
+      <input type="text" id="searchInput" placeholder="Search shows, topics, dates..."
+        onkeydown="if(event.key==='Enter') resetAndSearch()"
+        class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <button id="noise-toggle" onclick="toggleNoiseFilter()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Clean Feed: ON</button>
+      <select id="showFilterDropdown" onchange="applyShowFilter()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-3 py-2 max-w-[150px] truncate outline-none cursor-pointer">
+        <option value="ALL">All Shows</option>
+      </select>
+      <div class="relative" id="station-wrap">
+        <button onclick="toggleDropdown()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Stations</button>
+        <div id="channel-dropdown" class="hidden absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3 z-50">
+          <div class="flex items-center justify-between mb-2 px-1 text-[10px] font-black uppercase text-slate-500">
+            <span>Collections</span>
+            <span class="flex gap-3">
+              <button onclick="setAllChannels(true)" class="text-blue-500 hover:text-blue-400">All</button>
+              <button onclick="setAllChannels(false)" class="text-slate-500 hover:text-slate-300">None</button>
+            </span>
+          </div>
+          <div id="network-options" class="space-y-0.5 max-h-64 overflow-y-auto"></div>
+        </div>
+      </div>
+      <button onclick="resetAndSearch()" class="text-[11px] font-black uppercase tracking-wider bg-blue-600 border border-blue-600 rounded-full px-5 py-2 hover:bg-blue-500 transition-colors">Search</button>
+    </div>
+  </div>
+</header>
+
+<!-- ============ RESULTS VIEW ============ -->
+<main id="search-view" class="flex-1 min-h-0 overflow-y-auto">
+  <div class="max-w-[1600px] mx-auto p-4 sm:p-6">
+    <div class="api-bar flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 mb-5 text-[11px] text-slate-500">
+      <span class="text-blue-500 font-bold px-2 py-0.5 bg-blue-500/10 rounded shrink-0">API</span>
+      <span id="current-api-url" class="truncate opacity-80 select-all">—</span>
+      <button onclick="copyApiUrl()" class="ml-auto shrink-0 hover:text-white transition-colors" title="Copy URL">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      </button>
+    </div>
+    <div id="results-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5"></div>
+    <div id="loader" class="py-20 text-center hidden">
+      <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-500/20 border-t-blue-500"></div>
+      <div class="mt-4 text-xs font-black uppercase tracking-widest text-slate-500">Loading broadcasts</div>
+    </div>
+    <div id="empty-state" class="hidden py-24 text-center text-slate-500 text-xs font-black uppercase tracking-widest">No broadcasts found</div>
+    <div id="pagination" class="mt-10 mb-4 hidden text-center">
+      <button onclick="loadMore()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-10 py-3 hover:bg-slate-700 transition-colors">Load more</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ PLAYER VIEW ============ -->
+<div id="player-view" class="fixed inset-0 z-[100] bg-slate-950 hidden overflow-y-auto">
+  <div class="max-w-5xl mx-auto px-3 sm:px-4 py-4 flex flex-col min-h-full">
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <button onclick="goBack()" class="flex items-center gap-2 bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-slate-800 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        Back
+      </button>
+      <a id="archive-source-link" href="#" target="_blank" rel="noopener" class="flex items-center gap-2 bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-slate-800 transition-colors">
+        Archive.org
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      </a>
+    </div>
+
+    <div class="mb-4 min-w-0">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span id="p-channel" class="bg-blue-600 px-2 py-0.5 rounded text-[10px] font-black text-white uppercase"></span>
+        <span id="p-date-ui" class="text-xs font-bold text-blue-400 mono"></span>
+        <span id="p-time-ui" class="text-xs font-bold text-slate-500 mono"></span>
+      </div>
+      <h2 id="p-title" class="text-xl font-black text-white uppercase tracking-tight truncate mt-1"></h2>
+    </div>
+
+    <div class="vid-stack group" id="vid-wrap">
+      <video id="vid-a" class="is-active" playsinline preload="metadata"></video>
+      <video id="vid-b" playsinline preload="metadata"></video>
+
+      <div id="player-error" class="hidden absolute inset-0 flex-col items-center justify-center gap-3 bg-black/80 text-center p-6">
+        <div class="text-red-400 text-sm font-black uppercase tracking-widest">Playback unavailable</div>
+        <div id="player-error-msg" class="text-slate-400 text-xs max-w-md"></div>
+        <button onclick="retryPlayback()" class="mt-2 text-[11px] font-black uppercase tracking-wider bg-blue-600 rounded-full px-6 py-2 hover:bg-blue-500">Retry</button>
+      </div>
+
+      <button id="big-play-btn" onclick="togglePlayPause()" class="hidden absolute inset-0 m-auto w-20 h-20 rounded-full bg-blue-600/85 hover:bg-blue-600 text-white items-center justify-center transition-transform hover:scale-105" style="display:none">
+        <svg id="big-play-icon" class="w-9 h-9 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="big-pause-icon" class="w-9 h-9" fill="currentColor" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+
+      <div class="ctrl-bar">
+        <div class="progress-track" id="progress-track">
+          <div class="progress-rail">
+            <div class="progress-fill" id="progress-fill"></div>
+            <div class="progress-knob" id="progress-knob" style="left:0%"></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 mt-1">
+          <button onclick="togglePlayPause()" class="text-white hover:text-blue-400 transition-colors shrink-0" title="Play/Pause (space)">
+            <svg id="ctrl-play-icon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24" style="display:none"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="ctrl-pause-icon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <button onclick="skipSeconds(-10)" class="text-slate-300 hover:text-white transition-colors shrink-0" title="Back 10s">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"/></svg>
+          </button>
+          <button onclick="skipSeconds(10)" class="text-slate-300 hover:text-white transition-colors shrink-0" title="Forward 10s">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"/></svg>
+          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button onclick="toggleMute()" class="text-slate-300 hover:text-white transition-colors" title="Mute (m)">
+              <svg id="vol-icon" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+              <svg id="mute-icon" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+            </button>
+            <input type="range" min="0" max="1" step="0.05" value="1" class="vol hidden sm:block" id="vol-slider" oninput="setVolume(parseFloat(this.value))">
+          </div>
+          <div id="timestamp-ui" class="text-[11px] font-bold text-slate-300 mono whitespace-nowrap">00:00:00 / 00:00:00</div>
+          <div class="flex-1"></div>
+          <button onclick="toggleFullscreen()" class="text-slate-300 hover:text-white transition-colors shrink-0" title="Fullscreen (f)">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 mb-2 flex items-center justify-between">
+      <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Chapters</span>
+      <span id="seg-count" class="text-[10px] font-bold text-slate-600 mono"></span>
+    </div>
+    <div id="seg-list" class="chapter-strip flex gap-2 overflow-x-auto pb-3"></div>
+    <div class="h-6"></div>
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const CONFIG = {
+  API_SEARCH: 'https://archive.org/advancedsearch.php',
+  API_META: 'https://archive.org/metadata/',
+  DL_BASE: 'https://archive.org/download/',
+  SEGMENT_LENGTH: 300,          // 5-minute slices, like the POC
+  STAGE_AHEAD_SECONDS: 25,      // start preloading the next slice this far before handoff
+  PAGE_SIZE: 48,
+  STATIONS: {
+    "CNNW": "CNN", "FOXNEWSW": "FOX NEWS", "MSNOW": "MSNBC", "CNBC": "CNBC",
+    "BLOOMBERG": "BLOOMBERG", "FBC": "FOX BIZ", "COM": "COMEDY",
+    "KNTV": "NBC Bay Area", "KGO": "ABC7 Bay Area", "KPIX": "CBS Bay Area", "KQED": "PBS Bay Area"
+  }
+};
+const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="52%" fill="#334155" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle">TV NEWS ARCHIVE</text></svg>');
+
+const state = {
+  page: 1,
+  allItems: [],
+  filterNoise: true,
+  // player
+  isPlayerOpen: false,
+  activeId: null,
+  file: null,
+  duration: 0,
+  currentStart: 0,
+  activeEl: null,      // currently visible <video>
+  stagerEl: null,      // hidden <video> preloading the next slice
+  stagedStart: null,   // which segment start the stager currently holds
+  stagerReady: false,
+  loadToken: 0,        // guards against stacked load listeners
+  volume: 1,
+  muted: false
+};
+
+/* ================= HELPERS ================= */
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const formatTime = (s) => {
+  s = Math.max(0, Math.floor(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+};
+const sanitizeTerm = (t) => t.replace(/["():\[\]{}^~*?\\\/]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/* ================= INIT ================= */
+window.addEventListener('DOMContentLoaded', () => {
+  state.activeEl = $('vid-a');
+  state.stagerEl = $('vid-b');
+  for (const v of [state.activeEl, state.stagerEl]) {
+    v.addEventListener('timeupdate', onTimeUpdate);
+    v.addEventListener('ended', onEnded);
+    v.addEventListener('error', onVideoError);
+  }
+  renderStations();
+  resetAndSearch();
+  $('progress-track').addEventListener('click', handleSeek);
+  document.addEventListener('keydown', onKeyDown);
+  // close station dropdown on outside click
+  document.addEventListener('click', (e) => {
+    const wrap = $('station-wrap');
+    if (!wrap.contains(e.target)) $('channel-dropdown').classList.add('hidden');
+  });
+  window.onpopstate = () => { if (state.isPlayerOpen) closePlayer(false); };
+});
+
+function onKeyDown(e) {
+  if (!state.isPlayerOpen) return;
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlayPause(); }
+  else if (e.key === 'ArrowRight') skipSeconds(10);
+  else if (e.key === 'ArrowLeft') skipSeconds(-10);
+  else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  else if (e.key === 'm' || e.key === 'M') toggleMute();
+}
+
+/* ================= SEARCH ================= */
+function renderStations() {
+  const container = $('network-options');
+  container.innerHTML = '';
+  Object.entries(CONFIG.STATIONS).forEach(([id, name]) => {
+    const label = document.createElement('label');
+    label.className = 'flex items-center justify-between gap-2 p-2 hover:bg-slate-800 rounded-lg cursor-pointer';
+    const span = document.createElement('span');
+    span.className = 'text-[11px] font-bold text-slate-400 uppercase';
+    span.textContent = name;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = `TV-${id}`; cb.checked = true;
+    cb.className = 'station-cb w-4 h-4 accent-blue-600 shrink-0';
+    cb.onchange = resetAndSearch;
+    label.appendChild(span); label.appendChild(cb);
+    container.appendChild(label);
+  });
+}
+
+const resetAndSearch = () => { state.page = 1; state.allItems = []; search(); };
+const loadMore = () => { state.page++; search(true); };
+
+async function search(append = false) {
+  const grid = $('results-grid');
+  const loader = $('loader');
+  const pag = $('pagination');
+  const empty = $('empty-state');
+  if (!append) { grid.innerHTML = ''; pag.classList.add('hidden'); empty.classList.add('hidden'); }
+  loader.classList.remove('hidden');
+
+  const term = sanitizeTerm($('searchInput').value.trim());
+  const channels = Array.from(document.querySelectorAll('.station-cb:checked')).map(c => `collection:${c.value}`);
+
+  if (channels.length === 0) {
+    loader.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.textContent = 'No stations selected';
+    return;
+  }
+
+  let q = `mediatype:movies AND (${channels.join(' OR ')})`;
+  if (term) q += ` AND (title:(${term}) OR description:(${term}))`;
+
+  const params = new URLSearchParams({
+    q,
+    'fl[]': ['identifier', 'title', 'date', 'publicdate'],
+    sort: 'publicdate desc',
+    rows: CONFIG.PAGE_SIZE,
+    page: state.page,
+    output: 'json'
+  });
+  const fullUrl = `${CONFIG.API_SEARCH}?${params}`;
+  $('current-api-url').textContent = fullUrl;
+
+  try {
+    const res = await fetch(fullUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const docs = data?.response?.docs || [];
+    if (docs.length === 0 && !append) empty.classList.remove('hidden');
+    renderItems(docs);
+    if (docs.length >= CONFIG.PAGE_SIZE) pag.classList.remove('hidden');
+  } catch (e) {
+    console.error('Search failed', e);
+    if (!append) { empty.classList.remove('hidden'); empty.textContent = 'Search failed — check connection and retry'; }
+  } finally {
+    loader.classList.add('hidden');
+  }
+}
+
+function parseMeta(fullTitle) {
+  const parts = fullTitle.split(/\s*:\s*/);
+  const showName = (parts[0] || 'Unknown Show').trim();
+  const stationPart = (parts[1] || '').trim();
+  const metaBlock = parts.slice(2).join(' : ').trim();
+  const stationId = stationPart.split(' ')[0].replace('TV-', '');
+  const channelLabel = CONFIG.STATIONS[stationId] || 'TV';
+  const lowTitle = fullTitle.toLowerCase();
+  const noiseKeywords = ['bay area', 'abc7', 'kpix', 'kntv', 'kgo', 'kqed'];
+  const isNoise = (channelLabel === 'TV') || noiseKeywords.some(k => lowTitle.includes(k));
+
+  let dateStr = '', timeStr = '';
+  if (metaBlock) {
+    const dateMatch = metaBlock.match(/^[a-zA-Z]+\s+\d{1,2},\s+\d{4}/);
+    if (dateMatch) {
+      dateStr = dateMatch[0];
+      timeStr = metaBlock.replace(dateStr, '').trim();
+    } else { dateStr = metaBlock; }
+  }
+  return { show: showName, channel: channelLabel, date: dateStr.toUpperCase(), time: timeStr.toUpperCase(), isNoise };
+}
+
+function renderItems(docs) {
+  const grid = $('results-grid');
+  docs.forEach(doc => {
+    const m = parseMeta(doc.title || '');
+    state.allItems.push({ doc, meta: m });
+
+    const card = document.createElement('div');
+    card.className = `card group cursor-pointer ${m.isNoise ? 'noise-item' : ''}`;
+    card.setAttribute('data-show-name', m.show);
+
+    const thumb = document.createElement('div');
+    thumb.className = 'relative aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900';
+
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = '';
+    img.className = 'thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100';
+    img.src = `https://archive.org/services/img/${doc.identifier}`;
+    img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_IMG; };
+    thumb.appendChild(img);
+
+    const grad = document.createElement('div');
+    grad.className = 'thumb-gradient absolute inset-0 pointer-events-none';
+    thumb.appendChild(grad);
+
+    const badge = document.createElement('div');
+    badge.className = 'absolute top-2 left-2 bg-blue-600 px-1.5 py-0.5 rounded text-[9px] font-black text-white uppercase tracking-tight';
+    badge.textContent = m.channel;
+    thumb.appendChild(badge);
+
+    if (m.time) {
+      const tb = document.createElement('div');
+      tb.className = 'absolute top-2 right-2 bg-black/80 border border-white/10 px-2 py-0.5 rounded text-[9px] font-black text-slate-100 mono uppercase';
+      tb.textContent = m.time;
+      thumb.appendChild(tb);
+    }
+
+    const cap = document.createElement('div');
+    cap.className = 'absolute bottom-0 left-0 right-0 p-3';
+    const h4 = document.createElement('h4');
+    h4.className = 'text-sm font-black text-white uppercase leading-tight line-clamp-2';
+    h4.textContent = m.show;
+    const d = document.createElement('div');
+    d.className = 'text-[10px] font-bold text-slate-400 mt-1 mono italic opacity-80';
+    d.textContent = m.date;
+    cap.appendChild(h4); cap.appendChild(d);
+    thumb.appendChild(cap);
+
+    card.appendChild(thumb);
+    card.onclick = () => openPlayer(doc.identifier, doc.title || doc.identifier);
+    grid.appendChild(card);
+  });
+  updateShowDropdown();
+  applyShowFilter(); // FIX: filter must apply to freshly appended pages too
+}
+
+function copyApiUrl() {
+  const text = $('current-api-url').textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  else fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  const dummy = document.createElement('input');
+  document.body.appendChild(dummy);
+  dummy.value = text; dummy.select();
+  document.execCommand('copy');
+  document.body.removeChild(dummy);
+}
+
+/* ================= FILTERS ================= */
+function updateShowDropdown() {
+  const dropdown = $('showFilterDropdown');
+  const currentVal = dropdown.value;
+  dropdown.innerHTML = '<option value="ALL">All Shows</option>';
+  const visibleShows = new Set();
+  state.allItems.forEach(item => {
+    if (!state.filterNoise || !item.meta.isNoise) visibleShows.add(item.meta.show);
+  });
+  Array.from(visibleShows).sort().forEach(show => {
+    const opt = document.createElement('option');
+    opt.value = show; opt.textContent = show;
+    dropdown.appendChild(opt);
+  });
+  dropdown.value = visibleShows.has(currentVal) ? currentVal : 'ALL';
+}
+
+function applyShowFilter() {
+  const selected = $('showFilterDropdown').value;
+  document.querySelectorAll('#results-grid > div').forEach(card => {
+    const matches = selected === 'ALL' || card.getAttribute('data-show-name') === selected;
+    card.style.display = matches ? '' : 'none';
+  });
+}
+
+function setAllChannels(val) {
+  document.querySelectorAll('.station-cb').forEach(cb => cb.checked = val);
+  resetAndSearch();
+}
+
+const toggleDropdown = () => $('channel-dropdown').classList.toggle('hidden');
+
+function toggleNoiseFilter() {
+  state.filterNoise = !state.filterNoise;
+  document.body.classList.toggle('hide-noise', state.filterNoise);
+  $('noise-toggle').textContent = state.filterNoise ? 'Clean Feed: ON' : 'Clean Feed: OFF';
+  updateShowDropdown();
+  applyShowFilter();
+}
+
+/* ================= PLAYER ================= */
+const segUrl = (start) => {
+  const end = Math.min(start + CONFIG.SEGMENT_LENGTH, state.duration);
+  return `${CONFIG.DL_BASE}${state.activeId}/${encodeURIComponent(state.file)}?start=${start}&end=${end}`;
+};
+const currentGlobalTime = () => state.currentStart + (state.activeEl?.currentTime || 0);
+
+async function openPlayer(id, title) {
+  state.activeId = id;
+  state.isPlayerOpen = true;
+  history.pushState({ playerOpen: true }, '');
+
+  const m = parseMeta(title);
+  $('player-view').classList.remove('hidden');
+  $('main-header').classList.add('hidden');
+  document.body.style.overflow = 'hidden';
+  $('p-title').textContent = m.show;
+  $('p-channel').textContent = m.channel;
+  $('p-date-ui').textContent = m.date;
+  $('p-time-ui').textContent = m.time;
+  $('archive-source-link').href = `https://archive.org/details/${id}`;
+  hideError();
+
+  resetEngine();
+  try {
+    const res = await fetch(`${CONFIG.API_META}${id}`);
+    if (!res.ok) throw new Error(`metadata HTTP ${res.status}`);
+    const data = await res.json();
+    const files = data.files || [];
+    // exact {id}.mp4 first (the streamable derivative), then any non-thumb mp4
+    const videoFile = files.find(f => f.name === `${id}.mp4`)
+      || files.find(f => f.name.endsWith('.mp4') && !f.name.toLowerCase().includes('thumb'));
+    if (!videoFile) { showError('No playable video file found for this broadcast.'); return; }
+    state.file = videoFile.name;
+    state.duration = parseFloat(videoFile.length) || 0;
+    if (!state.duration) { showError('This broadcast has no duration metadata, so it cannot be segmented.'); return; }
+    buildChapters();
+    playSegment(0, 0);
+  } catch (e) {
+    console.error(e);
+    showError('Could not load this broadcast. Check your connection and try again.');
+  }
+}
+
+function resetEngine() {
+  state.loadToken++;
+  state.currentStart = 0;
+  state.stagedStart = null;
+  state.stagerReady = false;
+  for (const v of [state.activeEl, state.stagerEl]) {
+    v.oncanplay = null;
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+    v.dataset.segStart = '';
+  }
+  state.activeEl.classList.add('is-active');
+  state.stagerEl.classList.remove('is-active');
+  applyVolume();
+  updatePlayUI(false);
+}
+
+function buildChapters() {
+  const list = $('seg-list');
+  list.innerHTML = '';
+  let count = 0;
+  // FIX: only emit buttons while start < duration (no dead button at exact multiples)
+  for (let start = 0; start < state.duration; start += CONFIG.SEGMENT_LENGTH) {
+    const end = Math.min(start + CONFIG.SEGMENT_LENGTH, state.duration);
+    const btn = document.createElement('button');
+    btn.id = `seg-btn-${start}`;
+    btn.className = 'chapter-btn px-3.5 py-2 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-black text-slate-400 mono hover:border-blue-500 hover:text-white transition-all';
+    btn.textContent = formatTime(start);
+    btn.title = `${formatTime(start)} – ${formatTime(end)}`;
+    btn.onclick = () => playSegment(start, 0);
+    list.appendChild(btn);
+    count++;
+  }
+  $('seg-count').textContent = `${count} chapters · ${formatTime(state.duration)}`;
+  updateChapters();
+}
+
+function updateChapters() {
+  document.querySelectorAll('#seg-list .chapter-btn').forEach(b => b.classList.remove('chapter-active'));
+  const btn = $(`seg-btn-${state.currentStart}`);
+  if (btn) {
+    btn.classList.add('chapter-active');
+    btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+/* ---- core: play one segment on the active element ---- */
+function playSegment(start, offset = 0) {
+  state.currentStart = start;
+  clearStager();
+  const v = state.activeEl;
+  const token = ++state.loadToken;
+  const url = segUrl(start);
+
+  if (v.dataset.segStart === String(start) && v.getAttribute('src')) {
+    v.currentTime = Math.min(offset, Math.max(0, (v.duration || 1) - 0.5));
+    v.play().catch(showResumeHint);
+  } else {
+    v.dataset.segStart = String(start);
+    v.oncanplay = null;
+    v.src = url;
+    v.load();
+    v.oncanplay = () => {
+      if (token !== state.loadToken) return; // superseded by a newer playSegment call
+      v.oncanplay = null;
+      try { v.currentTime = offset; } catch (e) {}
+      v.play().catch(showResumeHint);
+    };
+  }
+  updateChapters();
+  updatePlayUI(true);
+}
+
+/* ---- preloading: stage the next slice in the hidden element ---- */
+function stageNext() {
+  const next = state.currentStart + CONFIG.SEGMENT_LENGTH;
+  if (next >= state.duration || state.stagedStart === next) return;
+  const s = state.stagerEl;
+  state.stagedStart = next;
+  state.stagerReady = false;
+  s.dataset.segStart = String(next);
+  s.oncanplay = null;
+  s.src = segUrl(next);
+  s.load();
+  s.oncanplay = () => { s.oncanplay = null; state.stagerReady = true; };
+}
+
+function clearStager() {
+  state.stagedStart = null;
+  state.stagerReady = false;
+  const s = state.stagerEl;
+  s.oncanplay = null;
+  s.pause();
+  s.removeAttribute('src');
+  s.load();
+  s.dataset.segStart = '';
+}
+
+function handoff() {
+  const next = state.currentStart + CONFIG.SEGMENT_LENGTH;
+  if (next >= state.duration) { updatePlayUI(false); return; }
+  // near-gapless path: the stager already has the next slice buffered
+  if (state.stagerReady && state.stagerEl.dataset.segStart === String(next)) {
+    const oldActive = state.activeEl;
+    state.activeEl = state.stagerEl;
+    state.stagerEl = oldActive;
+    state.currentStart = next;
+    state.stagedStart = null;
+    state.stagerReady = false;
+    state.loadToken++;
+    oldActive.pause();
+    oldActive.classList.remove('is-active');
+    const v = state.activeEl;
+    v.classList.add('is-active');
+    try { v.currentTime = 0; } catch (e) {}
+    v.play().catch(showResumeHint);
+    updateChapters();
+    updatePlayUI(true);
+  } else {
+    playSegment(next, 0); // fallback: load directly (old behavior)
+  }
+}
+
+function onTimeUpdate(e) {
+  if (e.target !== state.activeEl || !state.isPlayerOpen) return;
+  const v = state.activeEl;
+  if (v.duration > 0) {
+    const timeLeft = v.duration - v.currentTime;
+    if (!v.paused && timeLeft < CONFIG.STAGE_AHEAD_SECONDS) stageNext();
+    if (!v.paused && timeLeft < 0.4) { handoff(); return; }
+  }
+  const g = currentGlobalTime();
+  const pct = state.duration ? (g / state.duration) * 100 : 0;
+  $('progress-fill').style.width = `${pct}%`;
+  $('progress-knob').style.left = `${pct}%`;
+  $('timestamp-ui').textContent = `${formatTime(g)} / ${formatTime(state.duration)}`;
+}
+
+function onEnded(e) {
+  if (e.target !== state.activeEl || !state.isPlayerOpen) return;
+  handoff();
+}
+
+function onVideoError(e) {
+  if (e.target !== state.activeEl || !state.isPlayerOpen) return;
+  // only surface an error if the very first segment fails
+  if (state.currentStart === 0 && !state.activeEl.getAttribute('src')) return;
+  if (state.currentStart === 0 && (state.activeEl.readyState === 0)) {
+    showError('The video stream failed to load. You can retry or pick another broadcast.');
+  }
+}
+
+/* ---- transport controls ---- */
+function togglePlayPause() {
+  const v = state.activeEl;
+  if (!v || !v.getAttribute('src')) return;
+  if (v.paused) { v.play().catch(showResumeHint); updatePlayUI(true); }
+  else { v.pause(); updatePlayUI(false); }
+}
+
+function updatePlayUI(isPlaying) {
+  $('ctrl-play-icon').style.display = isPlaying ? 'none' : '';
+  $('ctrl-pause-icon').style.display = isPlaying ? '' : 'none';
+  const big = $('big-play-btn');
+  if (isPlaying) { big.style.display = 'none'; }
+  else {
+    big.style.display = 'flex';
+    $('big-play-icon').style.display = '';
+    $('big-pause-icon').style.display = 'none';
+  }
+}
+
+function showResumeHint() {
+  // autoplay was blocked: surface the big play button so one tap resumes
+  updatePlayUI(false);
+}
+
+function skipSeconds(delta) {
+  if (!state.duration) return;
+  const target = Math.min(Math.max(0, currentGlobalTime() + delta), state.duration - 0.5);
+  seekAbsolute(target);
+}
+
+function seekAbsolute(absSeconds) {
+  const segStart = Math.floor(absSeconds / CONFIG.SEGMENT_LENGTH) * CONFIG.SEGMENT_LENGTH;
+  playSegment(segStart, absSeconds - segStart);
+}
+
+function handleSeek(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = Math.min(Math.max(0, (e.clientX - rect.left) / rect.width), 1);
+  seekAbsolute(state.duration * pct);
+}
+
+function setVolume(val) {
+  state.volume = val;
+  state.muted = val === 0 ? true : state.muted;
+  applyVolume();
+}
+function toggleMute() {
+  state.muted = !state.muted;
+  applyVolume();
+}
+function applyVolume() {
+  for (const v of [state.activeEl, state.stagerEl]) {
+    if (!v) continue;
+    v.volume = state.volume;
+    v.muted = state.muted;
+  }
+  $('vol-icon').style.display = state.muted || state.volume === 0 ? 'none' : '';
+  $('mute-icon').style.display = state.muted || state.volume === 0 ? '' : 'none';
+  const slider = $('vol-slider');
+  if (slider && document.activeElement !== slider) slider.value = state.muted ? 0 : state.volume;
+}
+
+function toggleFullscreen() {
+  const wrap = $('vid-wrap');
+  if (!document.fullscreenElement) wrap.requestFullscreen?.().catch(() => {});
+  else document.exitFullscreen?.();
+}
+
+function retryPlayback() {
+  hideError();
+  playSegment(state.currentStart, 0);
+}
+function showError(msg) {
+  $('player-error-msg').textContent = msg;
+  const e = $('player-error');
+  e.classList.remove('hidden');
+  e.classList.add('flex');
+  updatePlayUI(false);
+}
+function hideError() {
+  const e = $('player-error');
+  e.classList.add('hidden');
+  e.classList.remove('flex');
+}
+
+function goBack() {
+  if (history.state?.playerOpen) history.back();
+  else closePlayer(false);
+}
+
+function closePlayer(triggerHistory = true) {
+  resetEngine();
+  state.isPlayerOpen = false;
+  state.activeId = null;
+  $('player-view').classList.add('hidden');
+  $('main-header').classList.remove('hidden');
+  document.body.style.overflow = '';
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  if (triggerHistory && history.state?.playerOpen) history.back();
+}
+</script>
+</body>
+</html>
