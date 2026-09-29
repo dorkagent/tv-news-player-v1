@@ -489,7 +489,7 @@ async function search(append = false) {
     const data = await res.json();
     const docs = data?.response?.docs || [];
     if (docs.length === 0 && !append) empty.classList.remove('hidden');
-    renderItems(docs);
+    await renderItems(docs, append);
     if (docs.length >= CONFIG.PAGE_SIZE) pag.classList.remove('hidden');
   } catch (e) {
     console.error('Search failed', e);
@@ -523,13 +523,26 @@ function parseMeta(fullTitle, identifier = '') {
   return { show: showName, channel: channelLabel, stationKey: CONFIG.STATIONS[stationId] ? stationId : '', date: dateStr.toUpperCase(), time: timeStr.toUpperCase(), isNoise };
 }
 
-function renderItems(docs) {
+// Renders one page of search results. When Clean Feed is on, transcode status
+// is checked BEFORE each card renders, so the filter applies as results load —
+// cards stream in, in search order, and never appear-then-vanish.
+async function renderItems(docs, append = false) {
   const grid = $('results-grid');
   clearSkeletons(); // remove skeleton placeholders
-  docs.forEach(doc => {
-    const m = parseMeta(doc.title || '', doc.identifier);
-    state.allItems.push({ doc, meta: m });
+  const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
+  const runId = ++probeRunId;
+  renderChain = renderChain.catch(() => {}).then(async () => {
+    if (runId !== probeRunId) return; // superseded before we started — don't pollute state
+    items.forEach(it => state.allItems.push(it));
+    await renderGated(grid, items, runId, !append);
+  });
+  await renderChain;
+  updateShowDropdown();
+  applyShowFilter();
+}
 
+// Builds a result card element (not attached — the caller places it).
+function buildCard(doc, m) {
     const card = document.createElement('div');
     card.className = `card group cursor-pointer ${m.isNoise ? 'noise-item' : ''}`;
     card.setAttribute('data-show-name', m.show);
@@ -595,11 +608,93 @@ function renderItems(docs) {
 
     card.appendChild(thumb);
     card.onclick = () => openPlayer(doc.identifier, doc.title || doc.identifier);
-    grid.appendChild(card);
+    return card;
+}
+
+/* Clean Feed transcode check — applied as results load, not after the fact.
+   Each broadcast is checked for a derived mp4 BEFORE its card renders, so the
+   grid never shows cards that then disappear. Detection: the metadata "files"
+   endpoint answers for the exact {id}.mp4 with a tiny CORS-enabled JSON
+   (~100-500 bytes) — {"result":{...}} when derived, {"error":"File ... not
+   found"} when not. Verified Sep 2026: 15/15 sampled items across all 9
+   stations use the standard {id}.mp4 derive name, so no file-list fallback is
+   needed. Still archive.org-only. Fail-open: a network failure leaves the card
+   visible (unknown is not unplayable). */
+const TRANSCODE_PROBE_CONCURRENCY = 6; // tiny JSON fetches — cheap, and thumbnails load after
+let probeRunId = 0; // bumped per render pass; stale passes stop instead of rendering
+let renderChain = Promise.resolve(); // serializes render passes so appended pages keep order
+
+// Renders items into the grid with Clean Feed applied at render time. When the
+// filter is on, cards stream in in search order as each broadcast is confirmed
+// playable. `clearFirst` wipes the grid for fresh searches (appends keep it).
+async function renderGated(grid, items, runId, clearFirst) {
+  if (runId !== probeRunId) return;
+  if (clearFirst) grid.innerHTML = '';
+  // Recompute title-based noise fresh so toggles never work from stale flags.
+  items.forEach(it => { it.meta = parseMeta(it.doc.title || '', it.doc.identifier); });
+
+  if (!state.filterNoise) {
+    items.forEach(it => grid.appendChild(buildCard(it.doc, it.meta)));
+    return;
+  }
+
+  const outcomes = new Array(items.length); // undefined = probe still pending
+  let upTo = -1, rendered = 0;
+  const pump = () => { // append confirmed cards in search order
+    while (upTo + 1 < items.length && outcomes[upTo + 1] !== undefined) {
+      upTo++;
+      const oc = outcomes[upTo];
+      if (oc) { grid.appendChild(buildCard(oc.doc, oc.meta)); rendered++; }
+    }
+  };
+
+  let i = 0;
+  const workerCount = Math.min(TRANSCODE_PROBE_CONCURRENCY, items.length);
+  if (workerCount > 0) {
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (runId === probeRunId) {
+        const idx = i++;
+        if (idx >= items.length) return;
+        const it = items[idx];
+        let show = true;
+        if (!it.meta.isNoise) {
+          let ok = state.transcodeCache.get(it.doc.identifier);
+          if (ok === undefined) {
+            ok = await probeTranscoded(it.doc.identifier);
+            if (runId !== probeRunId) return; // stale pass — drop everything
+            if (ok !== null) state.transcodeCache.set(it.doc.identifier, ok);
+          }
+          if (ok === false) { it.meta.isNoise = true; show = false; } // still transcoding: no card
+        }
+        outcomes[idx] = show ? it : null;
+        pump();
+      }
+    });
+    await Promise.all(workers);
+  }
+  if (runId !== probeRunId) return; // a newer pass owns the grid now
+  pump();
+  if (rendered === 0 && items.length > 0 && grid.children.length === 0) {
+    const empty = $('empty-state');
+    empty.classList.remove('hidden');
+    empty.textContent = 'Nothing playable here yet — these broadcasts are still transcoding on archive.org.';
+  }
+}
+
+// Rebuilds the whole grid from state (Clean Feed toggle). The filter applies as
+// the source of truth at render time; cached transcode verdicts make this
+// near-instant, and only never-before-seen broadcasts get probed.
+async function rerenderGrid() {
+  const runId = ++probeRunId; // abort any in-flight pass first
+  renderChain = renderChain.catch(() => {}).then(async () => {
+    const grid = $('results-grid');
+    grid.innerHTML = '';
+    $('empty-state').classList.add('hidden');
+    await renderGated(grid, state.allItems, runId, false);
   });
+  await renderChain;
   updateShowDropdown();
-  applyShowFilter(); // FIX: filter must apply to freshly appended pages too
-  probeTranscodes(docs); // Clean Feed: hide broadcasts whose mp4 hasn't derived yet
+  applyShowFilter();
 }
 
 function copyApiUrl() {
@@ -647,50 +742,11 @@ function setAllChannels(val) {
 
 const toggleDropdown = () => $('channel-dropdown').classList.toggle('hidden');
 
-function toggleNoiseFilter() {
+async function toggleNoiseFilter() {
   state.filterNoise = !state.filterNoise;
   document.body.classList.toggle('hide-noise', state.filterNoise);
   $('noise-toggle').textContent = state.filterNoise ? 'Clean Feed: ON' : 'Clean Feed: OFF';
-  if (state.filterNoise) probeTranscodes(state.allItems.map(it => it.doc));
-  updateShowDropdown();
-  applyShowFilter();
-}
-
-/* Clean Feed transcode check: hide broadcasts whose mp4 hasn't been derived yet.
-   Detection: the metadata "files" endpoint answers for the exact {id}.mp4 with a
-   tiny CORS-enabled JSON (~100-500 bytes) — {"result":{...}} when derived,
-   {"error":"File ... not found"} when not. Verified Sep 2026: a missing
-   thumbnail (services/img 302 -> notfound2x.png) does correlate with no mp4 yet,
-   but the files endpoint is ground truth, so we check that directly. 15/15
-   sampled items across all 9 stations use the standard {id}.mp4 derive name, so
-   no file-list fallback is needed. Still archive.org-only. */
-const TRANSCODE_PROBE_CONCURRENCY = 6; // tiny JSON fetches — far cheaper than the old video probes
-const TRANSCODE_PROBE_DELAY_MS = 1000; // let search results + thumbnails win the connection race first
-let probeRunId = 0; // bumped per search/toggle; stale runs abort instead of competing
-
-function probeTranscodes(docs) {
-  if (!state.filterNoise) return;
-  const runId = ++probeRunId;
-  const queue = docs.filter(d => !state.transcodeCache.has(d.identifier));
-  if (!queue.length) return;
-  setTimeout(() => {
-    if (runId !== probeRunId || !state.filterNoise) return;
-    let i = 0;
-    const workers = Array.from({ length: Math.min(TRANSCODE_PROBE_CONCURRENCY, queue.length) }, async () => {
-      while (i < queue.length && runId === probeRunId) {
-        const doc = queue[i++];
-        const ok = await probeTranscoded(doc.identifier);
-        if (runId !== probeRunId) return; // a newer search started; drop everything
-        if (ok === null) continue; // network failure (unknown) — fail open, don't cache
-        state.transcodeCache.set(doc.identifier, ok);
-        if (!ok && state.filterNoise) markUntranscoded(doc.identifier);
-      }
-    });
-    Promise.all(workers).then(() => {
-      if (runId !== probeRunId) return;
-      updateShowDropdown(); applyShowFilter();
-    });
-  }, TRANSCODE_PROBE_DELAY_MS);
+  await rerenderGrid(); // the filter applies as the source of truth at render time
 }
 
 // Ground truth for "is this broadcast playable": the item's file catalog.
@@ -702,13 +758,6 @@ async function probeTranscoded(id) {
     const data = await res.json();
     return !!(data && data.result);
   } catch { return null; }
-}
-
-function markUntranscoded(id) {
-  const card = document.querySelector(`#results-grid [data-identifier="${CSS.escape(id)}"]`);
-  if (card) card.classList.add('noise-item');
-  const item = state.allItems.find(it => it.doc.identifier === id);
-  if (item) item.meta.isNoise = true;
 }
 
 /* ================= PLAYER ================= */
