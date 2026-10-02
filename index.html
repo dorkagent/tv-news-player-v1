@@ -4,233 +4,491 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NewsDork</title>
+<meta name="description" content="NewsDork — browse and search decades of TV news broadcasts from the Internet Archive's TV News Archive.">
 <link rel="preconnect" href="https://archive.org">
 <link rel="dns-prefetch" href="https://archive.org">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root { --bg-main: #0b0f1a; --accent: #2563eb; }
+/* ============ NewsDork overhaul — "Archive Stream" design system ============
+   Dark cinematic neutrals + single lime accent. Condensed editorial display
+   type for headlines, Inter for UI, system mono for timecodes/identifiers. */
+:root {
+  --bg0: #07090d;
+  --bg1: #0b0e14;
+  --surface: #10141c;
+  --surface2: #161b25;
+  --border: #1f2632;
+  --border-soft: #161c26;
+  --text: #f2f5f7;
+  --muted: #9aa3b2;
+  --faint: #5d6675;
+  --lime: #c8f542;
+  --lime-ink: #131a05;
+  --lime-dim: rgba(200, 245, 66, .12);
+  --lime-line: rgba(200, 245, 66, .35);
+  --font-display: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
 html, body { height: 100%; }
-body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background-color: var(--bg-main); color: #f8fafc; overflow-x: hidden; }
-.mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
-#search-view { scrollbar-width: thin; scrollbar-color: #334155 var(--bg-main); }
-#search-view::-webkit-scrollbar { width: 8px; }
-#search-view::-webkit-scrollbar-track { background: var(--bg-main); }
-#search-view::-webkit-scrollbar-thumb { background: #334155; border-radius: 8px; }
-.thumb-img { transition: transform .35s ease, opacity .3s ease; }
-.card:hover .thumb-img { transform: scale(1.06); }
-/* low-spec: skip rendering off-screen cards entirely; reserve ~340px so the scrollbar doesn't jump */
-.card { content-visibility: auto; contain-intrinsic-size: auto 340px; }
-/* station rows view: one horizontal carousel row per station */
-.station-row-strip { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: .5rem;
-  scrollbar-width: thin; scrollbar-color: #334155 transparent; }
-.station-row-strip::-webkit-scrollbar { height: 6px; }
-.station-row-strip::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-.station-row-strip .card { width: 16rem; flex-shrink: 0; }
-.row-nav { padding: .25rem; border-radius: .5rem; }
-.row-nav:hover { background: #1e293b; }
+body {
+  font-family: var(--font-ui);
+  background:
+    radial-gradient(1200px 500px at 70% -10%, rgba(200,245,66,.045), transparent 60%),
+    radial-gradient(900px 420px at 10% 0%, rgba(56,120,255,.05), transparent 55%),
+    var(--bg0);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: var(--font-mono); }
+.display { font-family: var(--font-display); }
+
+/* ---------- header ---------- */
+#main-header {
+  position: sticky; top: 0; z-index: 40;
+  background: rgba(7, 9, 13, .82);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border-soft);
+}
+.wordmark { font-family: var(--font-display); font-weight: 700; font-size: 1.7rem;
+  letter-spacing: .04em; line-height: 1; text-transform: uppercase; }
+.wordmark .wm-dork { color: var(--lime); }
+.search-shell { position: relative; }
+.search-shell input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: .7rem 3.2rem .7rem 1rem;
+  font-size: .9rem; color: var(--text); outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.search-shell input::placeholder { color: var(--faint); }
+.search-shell input:focus { border-color: var(--lime-line); box-shadow: 0 0 0 3px var(--lime-dim); }
+.search-shell kbd {
+  position: absolute; right: .8rem; top: 50%; transform: translateY(-50%);
+  font-family: var(--font-mono); font-size: .68rem; color: var(--faint);
+  border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px;
+  padding: .1rem .42rem; background: var(--bg1); pointer-events: none;
+}
+.pill {
+  display: inline-flex; align-items: center; gap: .45rem;
+  font-size: .68rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  border-radius: 999px; padding: .55rem 1rem; cursor: pointer; white-space: nowrap;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.pill:hover { border-color: var(--faint); color: var(--text); }
+.pill.pill-on { border-color: var(--lime-line); color: var(--lime); background: var(--lime-dim); }
+.pill.pill-on .pill-dot { background: var(--lime); box-shadow: 0 0 8px var(--lime); }
+.pill-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: all .15s; }
+select.pill { appearance: none; -webkit-appearance: none; padding-right: 1.9rem;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%239aa3b2' stroke-width='1.6' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat; background-position: right .85rem center; }
+select.pill option { background: var(--surface2); color: var(--text); }
+.btn-lime {
+  font-size: .68rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase;
+  background: var(--lime); color: var(--lime-ink);
+  border-radius: 999px; padding: .6rem 1.35rem; white-space: nowrap;
+  transition: transform .12s, box-shadow .15s, filter .15s;
+}
+.btn-lime:hover { filter: brightness(1.06); box-shadow: 0 4px 22px rgba(200,245,66,.28); }
+.btn-lime:active { transform: scale(.97); }
+.btn-ghost {
+  font-size: .68rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase;
+  border: 1px solid var(--lime-line); color: var(--lime); background: transparent;
+  border-radius: 999px; padding: .55rem 1.1rem; white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.btn-ghost:hover { background: var(--lime-dim); }
+
+/* ---------- API status bar ---------- */
+.api-bar {
+  display: flex; align-items: center; gap: .7rem;
+  font-family: var(--font-mono); font-size: .68rem; color: var(--faint);
+  background: var(--bg1); border: 1px solid var(--border-soft); border-radius: 10px;
+  padding: .5rem .9rem;
+}
+.api-live { width: 7px; height: 7px; border-radius: 50%; background: var(--lime);
+  box-shadow: 0 0 8px var(--lime); flex-shrink: 0; animation: pulse 2.4s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* ---------- rails ---------- */
+.rail { margin-bottom: 2.6rem; }
+.rail-head { display: flex; align-items: baseline; gap: .9rem; margin-bottom: 1rem; }
+.rail-title {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.55rem;
+  letter-spacing: .06em; text-transform: uppercase; line-height: 1;
+}
+.rail-title .accent { color: var(--lime); }
+.rail-meta { font-family: var(--font-mono); font-size: .68rem; color: var(--faint);
+  letter-spacing: .08em; text-transform: uppercase; }
+.rail-nav { margin-left: auto; display: flex; gap: .4rem; }
+.rail-btn {
+  width: 2.1rem; height: 2.1rem; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.rail-btn:hover { border-color: var(--lime-line); color: var(--lime); background: var(--surface2); }
+.rail-btn:disabled { opacity: .3; pointer-events: none; }
+.rail-strip {
+  display: flex; gap: 1rem; overflow-x: auto; padding: .25rem .1rem 1rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.rail-strip::-webkit-scrollbar { height: 6px; }
+.rail-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.rail-strip::-webkit-scrollbar-track { background: transparent; }
+.rail-strip .card { scroll-snap-align: start; }
+
+/* ---------- cards ---------- */
+.card { cursor: pointer; }
+.card .thumb {
+  position: relative; aspect-ratio: 16/9; border-radius: 14px; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border-soft);
+  transition: border-color .2s, transform .25s ease, box-shadow .25s ease;
+}
+.card:hover .thumb, .card:focus-within .thumb {
+  border-color: var(--lime-line); transform: translateY(-3px);
+  box-shadow: 0 14px 34px rgba(0,0,0,.5), 0 0 0 1px var(--lime-dim);
+}
+.thumb img.thumb-img { width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform .4s ease, opacity .3s ease; }
+.card:hover .thumb-img { transform: scale(1.05); }
+.thumb-gradient { position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(0deg, rgba(4,6,10,.92) 0%, rgba(4,6,10,.35) 45%, transparent 75%); }
+.station-badge {
+  position: absolute; top: .65rem; left: .65rem; z-index: 2;
+  font-size: .6rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  padding: .28rem .55rem; border-radius: 7px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.45);
+}
+.play-overlay { position: absolute; inset: 0; z-index: 2; display: flex;
+  align-items: center; justify-content: center;
+  opacity: 0; transform: scale(.85); transition: opacity .18s, transform .18s;
+  pointer-events: none; }
+.card:hover .play-overlay, .card:focus-within .play-overlay { opacity: 1; transform: scale(1); }
+.po-circle { width: 3.4rem; height: 3.4rem; border-radius: 50%;
+  background: rgba(7,9,13,.6); border: 1.5px solid var(--lime);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 26px rgba(200,245,66,.35); }
+@media (hover: none) { .play-overlay { opacity: 1; transform: none; } .po-circle { width: 2.4rem; height: 2.4rem; } }
+.card-meta { padding: .7rem .2rem 0; }
+.card-show { font-weight: 700; font-size: .86rem; letter-spacing: .01em; color: var(--text);
+  text-transform: uppercase; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-sub { display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  margin-top: .35rem; font-family: var(--font-mono); font-size: .66rem; color: var(--faint);
+  letter-spacing: .05em; text-transform: uppercase; }
+.card-sub a { color: var(--faint); }
+.card-sub a:hover { color: var(--lime); }
+/* low-spec: skip rendering off-screen cards entirely */
+.card { content-visibility: auto; contain-intrinsic-size: auto 320px; }
 .noise-item { opacity: .35; }
 .hide-noise .noise-item { display: none !important; }
-.thumb-gradient { background: linear-gradient(0deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.45) 55%, rgba(0,0,0,0) 90%); }
-/* player */
-#player-view { -webkit-overflow-scrolling: touch; }
-.vid-stack { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #1e293b; }
-.vid-stack video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; opacity: 0; pointer-events: none; transition: opacity .15s linear; }
-.vid-stack video.is-active { opacity: 1; pointer-events: auto; }
-.ctrl-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 12px 10px; background: linear-gradient(0deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,0) 100%); }
-.progress-track { height: 14px; display: flex; align-items: center; cursor: pointer; }
-.progress-rail { height: 5px; width: 100%; background: rgba(255,255,255,.22); border-radius: 3px; position: relative; }
-.progress-rail:hover { height: 7px; }
-.progress-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 3px; }
-.progress-knob { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; background: #fff; transform: translate(-50%,-50%) scale(0); transition: transform .15s; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
-.progress-track:hover .progress-knob { transform: translate(-50%,-50%) scale(1); }
-.chapter-strip { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
-.chapter-strip::-webkit-scrollbar { height: 6px; }
-.chapter-strip::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-.chapter-btn { flex: 0 0 auto; }
-.chapter-btn.chapter-active { border-color: var(--accent) !important; color: #fff !important; background: #1e3a8a !important; }
-input[type="range"].vol { accent-color: var(--accent); width: 90px; }
-.api-bar { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
-select option { background: #0f172a; }
 /* skeleton shimmer */
-.skeleton { position: relative; overflow: hidden; background-color: #1e293b; }
+.skeleton { position: relative; overflow: hidden; background-color: var(--surface); }
 .skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent);
   animation: shimmer 1.4s infinite; }
 @keyframes shimmer { 100% { transform: translateX(100%); } }
-/* card play overlay */
-.play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  opacity: 0; transform: scale(.85); transition: opacity .18s, transform .18s; pointer-events: none; }
-.card:hover .play-overlay, .card:focus-within .play-overlay { opacity: 1; transform: scale(1); }
-.po-circle { width: 3.5rem; height: 3.5rem; border-radius: 9999px; background: rgba(0,0,0,.55);
-  border: 1.5px solid rgba(255,255,255,.35); display: flex; align-items: center; justify-content: center; }
-@media (hover: none) { .play-overlay { opacity: 1; transform: none; } .po-circle { width: 2.5rem; height: 2.5rem; } }
 
-/* ============ static utilities (replaces the Tailwind Play CDN: zero runtime JIT) ============ */
-/* minimal preflight */
+/* ---------- player (theater) ---------- */
+#player-view { background: rgba(4, 6, 10, .97); -webkit-overflow-scrolling: touch; }
+.vid-stack { position: relative; width: 100%; aspect-ratio: 16/9; background: #000;
+  border-radius: 16px; overflow: hidden; border: 1px solid var(--border); }
+.vid-stack video { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; background: #000; opacity: 0; pointer-events: none;
+  transition: opacity .15s linear; }
+.vid-stack video.is-active { opacity: 1; pointer-events: auto; }
+.ctrl-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 14px 12px;
+  background: linear-gradient(0deg, rgba(0,0,0,.88) 0%, rgba(0,0,0,0) 100%); }
+.progress-track { height: 16px; display: flex; align-items: center; cursor: pointer; }
+.progress-rail { height: 5px; width: 100%; background: rgba(255,255,255,.22);
+  border-radius: 3px; position: relative; transition: height .12s; }
+.progress-track:hover .progress-rail { height: 7px; }
+.progress-fill { height: 100%; background: var(--lime); width: 0%; border-radius: 3px; }
+.progress-knob { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--lime); transform: translate(-50%,-50%) scale(0); transition: transform .15s;
+  box-shadow: 0 0 10px rgba(200,245,66,.7); }
+.progress-track:hover .progress-knob { transform: translate(-50%,-50%) scale(1); }
+.chapter-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0,0,0,.55);
+  transform: translateX(-1px); pointer-events: none; }
+.chapter-strip { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.chapter-strip::-webkit-scrollbar { height: 6px; }
+.chapter-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.chapter-btn { flex: 0 0 auto; font-family: var(--font-mono); font-size: .68rem; font-weight: 700;
+  padding: .55rem .9rem; border-radius: 10px; background: var(--surface);
+  border: 1px solid var(--border); color: var(--muted); letter-spacing: .05em;
+  transition: border-color .15s, color .15s, background .15s; }
+.chapter-btn:hover { border-color: var(--lime-line); color: var(--text); }
+.chapter-btn.chapter-active { border-color: var(--lime); color: var(--lime-ink);
+  background: var(--lime); }
+input[type="range"].vol { accent-color: var(--lime); width: 90px; }
+.prov-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+  padding: .65rem 0; border-bottom: 1px solid var(--border-soft); }
+.prov-row:last-child { border-bottom: 0; }
+.prov-k { font-size: .64rem; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--faint); flex-shrink: 0; }
+.prov-v { font-family: var(--font-mono); font-size: .72rem; color: var(--muted);
+  text-align: right; word-break: break-all; }
+.prov-v.hl { color: var(--text); }
+
+/* ---------- misc ---------- */
+.eyebrow { font-size: .64rem; font-weight: 800; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--faint); }
+#search-view { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg0); }
+#search-view::-webkit-scrollbar { width: 8px; }
+#search-view::-webkit-scrollbar-track { background: var(--bg0); }
+#search-view::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+select option { background: var(--surface2); }
+:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+
+/* minimal preflight + layout utilities */
 *,*::before,*::after{box-sizing:border-box}
 body,h1,h2,h3,p{margin:0}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 input,select{font:inherit;color:inherit}
 img,video{max-width:100%}
 a{color:inherit;text-decoration:none}
-/* layout */
 .flex{display:flex}.grid{display:grid}
 .flex-1{flex:1 1 0%}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}
-.flex-shrink-0{flex-shrink:0}.shrink-0{flex-shrink:0}
-.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}
-.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}
+.shrink-0{flex-shrink:0}.min-w-0{min-width:0}
+.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-center{justify-content:center}.justify-between{justify-content:space-between}
+.gap-1{gap:.25rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}
 .absolute{position:absolute}.relative{position:relative}.fixed{position:fixed}
 .inset-0{top:0;right:0;bottom:0;left:0}
-.top-2{top:.5rem}.top-full{top:100%}.left-0{left:0}.left-2{left:.5rem}
-.right-0{right:0}.right-2{right:.5rem}.bottom-0{bottom:0}
-.z-40{z-index:40}.z-50{z-index:50}.z-\[100\]{z-index:100}
+.top-3{top:.75rem}.right-3{right:.75rem}
+.z-50{z-index:50}.z-100{z-index:100}
 .hidden{display:none}
-/* sizing */
 .w-full{width:100%}.h-full{height:100%}.h-screen{height:100vh}
-.w-3\.5{width:.875rem}.h-3\.5{height:.875rem}.w-4{width:1rem}.h-4{height:1rem}
-.w-5{width:1.25rem}.h-5{height:1.25rem}.w-6{width:1.5rem}.h-6{height:1.5rem}
-.w-7{width:1.75rem}.h-7{height:1.75rem}.w-9{width:2.25rem}.h-9{height:2.25rem}
-.w-20{width:5rem}.h-20{height:5rem}.w-64{width:16rem}.h-2\.5{height:.625rem}.h-3{height:.75rem}
-.w-1\/2{width:50%}.w-3\/4{width:75%}
-.max-w-5xl{max-width:64rem}.max-w-md{max-width:28rem}.max-w-xl{max-width:36rem}
-.max-w-\[150px\]{max-width:150px}.max-w-\[1600px\]{max-width:1600px}.max-h-64{max-height:16rem}
-.min-h-0{min-height:0}.min-h-full{min-height:100%}.min-w-0{min-width:0}.min-w-\[180px\]{min-width:180px}
-.mx-auto{margin-left:auto;margin-right:auto}.m-auto{margin:auto}.ml-auto{margin-left:auto}
-.ml-0\.5{margin-left:.125rem}.ml-1{margin-left:.25rem}
-.mb-2{margin-bottom:.5rem}.mb-4{margin-bottom:1rem}.mb-5{margin-bottom:1.25rem}
-.mt-1{margin-top:.25rem}.mt-1\.5{margin-top:.375rem}.mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}.mt-10{margin-top:2.5rem}
-/* spacing */
-.p-2{padding:.5rem}.p-3{padding:.75rem}.p-4{padding:1rem}.p-6{padding:1.5rem}
-.px-1{padding-left:.25rem;padding-right:.25rem}.px-1\.5{padding-left:.375rem;padding-right:.375rem}
-.px-10{padding-left:2.5rem;padding-right:2.5rem}.px-2{padding-left:.5rem;padding-right:.5rem}
-.px-3{padding-left:.75rem;padding-right:.75rem}.px-3\.5{padding-left:.875rem;padding-right:.875rem}
-.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}
-.px-6{padding-left:1.5rem;padding-right:1.5rem}
-.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}
-.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}.py-24{padding-top:6rem;padding-bottom:6rem}
-.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}
-.pb-3{padding-bottom:.75rem}
-.gap-2{gap:.5rem}.gap-2\.5{gap:.625rem}.gap-3{gap:.75rem}.gap-5{gap:1.25rem}
-.space-y-0\.5>*+*{margin-top:.125rem}
-/* typography */
-.text-\[9px\]{font-size:9px}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}
-.text-xs{font-size:.75rem;line-height:1rem}.text-sm{font-size:.875rem;line-height:1.25rem}
-.text-base{font-size:1rem;line-height:1.5rem}.text-xl{font-size:1.25rem;line-height:1.75rem}
-.font-black{font-weight:800}.font-bold{font-weight:700}
-.uppercase{text-transform:uppercase}.italic{font-style:italic}
-.tracking-tight{letter-spacing:-.025em}.tracking-wider{letter-spacing:.05em}.tracking-widest{letter-spacing:.1em}
-.leading-tight{line-height:1.25}.text-center{text-align:center}.whitespace-nowrap{white-space:nowrap}
-.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.text-blue-400{color:#60a5fa}.text-blue-500{color:#3b82f6}.text-red-400{color:#f87171}
-.text-slate-100{color:#f1f5f9}.text-slate-300{color:#cbd5e1}.text-slate-400{color:#94a3b8}
-.text-slate-500{color:#64748b}.text-slate-600{color:#475569}.text-white{color:#fff}
-.placeholder-slate-500::placeholder{color:#64748b;opacity:1}
-/* backgrounds */
-.bg-black\/80{background-color:rgba(0,0,0,.8)}.bg-blue-500\/10{background-color:rgba(59,130,246,.1)}
-.bg-blue-600{background-color:#2563eb}.bg-blue-600\/85{background-color:rgba(37,99,235,.85)}
-.bg-slate-800{background-color:#1e293b}.bg-slate-800\/80{background-color:rgba(30,41,59,.8)}
-.bg-slate-900{background-color:#0f172a}.bg-slate-900\/95{background-color:rgba(15,23,42,.95)}
-.bg-slate-950{background-color:#020617}
-/* borders */
-.border{border-width:1px;border-style:solid}.border-b{border-bottom-width:1px;border-style:solid}
-.border-blue-600{border-color:#2563eb}.border-slate-700{border-color:#334155}
-.border-slate-800{border-color:#1e293b}.border-white\/10{border-color:rgba(255,255,255,.1)}
-.rounded{border-radius:.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}
-/* effects */
-.shadow-2xl{box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
-.opacity-80{opacity:.8}.cursor-pointer{cursor:pointer}.pointer-events-none{pointer-events:none}
-.select-all{user-select:all}.select-none{user-select:none}
-.outline-none{outline:2px solid transparent;outline-offset:2px}
+.w-4{width:1rem}.h-4{height:1rem}.w-5{width:1.25rem}.h-5{height:1.25rem}
+.w-6{width:1.5rem}.h-6{height:1.5rem}.w-9{width:2.25rem}.h-9{height:2.25rem}
+.max-w-1600{max-width:1600px}.max-w-5xl{max-width:64rem}.max-w-md{max-width:28rem}
+.mx-auto{margin-left:auto;margin-right:auto}.ml-auto{margin-left:auto}
+.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}
+.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}
+.p-4{padding:1rem}.p-6{padding:1.5rem}.px-4{padding-left:1rem;padding-right:1rem}
+.px-5{padding-left:1.25rem;padding-right:1.25rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}
+.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-10{padding-top:2.5rem;padding-bottom:2.5rem}
+.py-24{padding-top:6rem;padding-bottom:6rem}
+.text-xs{font-size:.75rem}.text-sm{font-size:.875rem}.text-base{font-size:1rem}
+.text-xl{font-size:1.25rem}.text-2xl{font-size:1.5rem}
+.font-bold{font-weight:700}.font-extrabold{font-weight:800}
+.uppercase{text-transform:uppercase}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.whitespace-nowrap{white-space:nowrap}.break-all{word-break:break-all}.select-all{user-select:all}
+.text-center{text-align:center}.text-left{text-align:left}
 .overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}
-.object-cover{object-fit:cover}.aspect-video{aspect-ratio:16/9}
-.accent-blue-600{accent-color:#2563eb}
-.transition-colors{transition-property:color,background-color,border-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}
-.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}
-.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}
-/* hover / focus / group variants */
-.hover\:bg-blue-500:hover{background-color:#3b82f6}.hover\:bg-blue-600:hover{background-color:#2563eb}
-.hover\:bg-slate-700:hover{background-color:#334155}.hover\:bg-slate-800:hover{background-color:#1e293b}
-.hover\:border-blue-500:hover{border-color:#3b82f6}
-.hover\:text-blue-400:hover{color:#60a5fa}.hover\:text-slate-300:hover{color:#cbd5e1}.hover\:text-white:hover{color:#fff}
-.hover\:scale-105:hover{transform:scale(1.05)}
-.hover\:underline:hover{text-decoration:underline}
-.focus\:border-blue-500:focus{border-color:#3b82f6}
-.focus\:ring-1:focus{box-shadow:0 0 0 1px #3b82f6}
-.focus\:ring-blue-500:focus{box-shadow:0 0 0 1px #3b82f6}
-.group:hover .group-hover\:opacity-100{opacity:1}
-/* responsive */
-@media(min-width:640px){
-  .sm\:block{display:block}
-  .sm\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .sm\:p-6{padding:1.5rem}
-  .sm\:px-4{padding-left:1rem;padding-right:1rem}
-}
-@media(min-width:768px){.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(min-width:1280px){.xl\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(min-width:1536px){.\32 xl\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.rounded-xl{border-radius:.75rem}.rounded-2xl{border-radius:1rem}
+.cursor-pointer{cursor:pointer}.pointer-events-none{pointer-events:none}
+.opacity-80{opacity:.8}
+.grid-results{grid-template-columns:repeat(1,minmax(0,1fr));gap:1.25rem}
+@media(min-width:640px){.grid-results{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:900px){.grid-results{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1280px){.grid-results{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:1600px){.grid-results{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(min-width:1024px){.theater-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:1.75rem;align-items:start}}
+@media(max-width:640px){.wordmark{font-size:1.35rem}.rail-title{font-size:1.25rem}}
 </style>
 </head>
-<body class="h-screen flex flex-col hide-noise">
+<body class="hide-noise">
 
-<!-- ============ MAIN HEADER ============ -->
-<header id="main-header" class="flex-shrink-0 bg-slate-900 border-b border-slate-800 px-4 py-3 z-40">
-  <div class="max-w-[1600px] mx-auto flex flex-wrap items-center gap-3">
-    <div class="flex items-center gap-2.5 cursor-pointer select-none" onclick="location.reload()" title="Reload">
-      <div class="bg-blue-600 p-2 rounded-lg">
-        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+<!-- ============ HEADER ============ -->
+<header id="main-header">
+  <div class="max-w-1600 mx-auto flex flex-wrap items-center gap-3 px-4 py-3">
+    <div class="flex items-center gap-3 cursor-pointer select-none" onclick="goHome()" title="NewsDork home">
+      <div style="width:2.4rem;height:2.4rem;border-radius:.8rem;background:var(--lime);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(200,245,66,.3)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#131a05" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
       </div>
-      <h1 class="text-base font-black tracking-tight uppercase">News<span class="text-blue-500">Dork</span></h1>
+      <div>
+        <div class="wordmark">News<span class="wm-dork">Dork</span></div>
+        <div class="eyebrow" style="margin-top:.15rem">TV News Archive</div>
+      </div>
     </div>
-    <div class="flex-1 min-w-[180px] max-w-xl">
-      <input type="text" id="searchInput" placeholder="Search shows, topics, dates..."
-        onkeydown="if(event.key==='Enter') resetAndSearch()"
-        class="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+    <div class="flex-1 min-w-0" style="min-width:200px;max-width:34rem">
+      <div class="search-shell">
+        <input type="text" id="searchInput" placeholder="Search shows, topics, dates..."
+          onkeydown="if(event.key==='Enter') resetAndSearch()" aria-label="Search broadcasts">
+        <kbd>&#8984;K</kbd>
+      </div>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <button id="noise-toggle" onclick="toggleNoiseFilter()" title="Clean Feed: only broadcasts whose MP4 has finished transcoding, hide unrecognized stations" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Clean Feed: ON</button>
-      <select id="showFilterDropdown" onchange="applyShowFilter()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-3 py-2 max-w-[150px] truncate outline-none cursor-pointer">
+      <button id="noise-toggle" onclick="toggleNoiseFilter()" title="Clean Feed: only broadcasts whose MP4 has finished transcoding" class="pill pill-on"><span class="pill-dot"></span><span id="noise-label">Clean Feed</span></button>
+      <select id="showFilterDropdown" onchange="applyShowFilter()" class="pill" aria-label="Filter by show">
         <option value="ALL">All Shows</option>
       </select>
       <div class="relative" id="station-wrap">
-        <button onclick="toggleDropdown()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-4 py-2 hover:bg-slate-700 transition-colors">Stations</button>
-        <div id="channel-dropdown" class="hidden absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3 z-50">
-          <div class="flex items-center justify-between mb-2 px-1 text-[10px] font-black uppercase text-slate-500">
-            <span>Collections</span>
-            <span class="flex gap-3">
-              <button onclick="setAllChannels(true)" class="text-blue-500 hover:text-blue-400">All</button>
-              <button onclick="setAllChannels(false)" class="text-slate-500 hover:text-slate-300">None</button>
+        <button onclick="toggleDropdown()" class="pill" aria-haspopup="true">Stations</button>
+        <div id="channel-dropdown" class="hidden absolute right-0 mt-2 w-64 rounded-2xl shadow-2xl p-3 z-50" style="top:100%;background:var(--surface2);border:1px solid var(--border)">
+          <div class="flex items-center justify-between mb-2 px-1">
+            <span class="eyebrow">Collections</span>
+            <span class="flex gap-3 text-xs font-bold">
+              <button onclick="setAllChannels(true)" style="color:var(--lime)">All</button>
+              <button onclick="setAllChannels(false)" style="color:var(--faint)">None</button>
             </span>
           </div>
-          <div id="network-options" class="space-y-0.5 max-h-64 overflow-y-auto"></div>
+          <div id="network-options" class="overflow-y-auto" style="max-height:16rem"></div>
         </div>
       </div>
-      <button onclick="resetAndSearch()" class="text-[11px] font-black uppercase tracking-wider bg-blue-600 border border-blue-600 rounded-full px-5 py-2 hover:bg-blue-500 transition-colors">Search</button>
-      <div class="flex items-center bg-slate-800 border border-slate-700 rounded-full p-0.5" role="tablist" aria-label="Browse view">
-        <button id="view-grid-btn" onclick="setView('grid')" role="tab" class="px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-colors bg-blue-600 text-white">Grid</button>
-        <button id="view-rows-btn" onclick="setView('rows')" role="tab" class="px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-colors text-slate-400 hover:text-white">Stations</button>
-      </div>
-      <button onclick="toggleDonateModal()" title="Support development of this free, open-source player" class="text-[11px] font-black uppercase tracking-wider bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-full px-4 py-2 hover:bg-amber-500/25 transition-colors">♥ Donate</button>
+      <button onclick="resetAndSearch()" class="btn-lime">Search</button>
+      <button onclick="toggleDonateModal()" title="Support development of this free, open-source player" class="btn-ghost">&#10084; Donate</button>
     </div>
   </div>
 </header>
 
 <!-- ============ DONATE MODAL ============ -->
-<div id="donate-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(0,0,0,.7)">
-  <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 relative">
-    <button onclick="toggleDonateModal()" class="absolute top-3 right-4 text-slate-500 hover:text-white text-xl leading-none" title="Close">×</button>
-    <h2 class="text-lg font-black mb-1">Support the player</h2>
-    <p class="text-sm text-slate-400 mb-4">NewsDork is free and open-source. Donations fund development of the player software itself — the archive streams stay free for everyone.</p>
-    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-3">
-      <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Bitcoin (BTC)</div>
+<div id="donate-modal" class="hidden fixed inset-0 z-100 flex items-center justify-center p-4" style="background:rgba(3,5,8,.75);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)">
+  <div class="rounded-2xl max-w-md w-full p-6 relative" style="background:var(--surface);border:1px solid var(--border)">
+    <button onclick="toggleDonateModal()" class="absolute top-3 right-4 text-xl leading-none" style="color:var(--faint)" title="Close">&times;</button>
+    <div class="eyebrow mb-2" style="color:var(--lime)">Support the player</div>
+    <h2 class="display text-2xl font-bold uppercase" style="letter-spacing:.04em">Keep NewsDork free</h2>
+    <p class="text-sm mt-2 mb-4" style="color:var(--muted)">NewsDork is free and open-source. Donations fund development of the player software itself &mdash; the archive streams stay free for everyone.</p>
+    <div class="rounded-xl p-4 mb-3" style="background:var(--bg1);border:1px solid var(--border-soft)">
+      <div class="eyebrow mb-2">Bitcoin (BTC)</div>
       <div class="flex items-center gap-2">
-        <code id="btc-address" class="mono text-xs text-amber-300 break-all flex-1 select-all">bc1qhdczc6na0s8thuql98g00g74shqsg8nuqrml75</code>
-        <button onclick="copyBtcAddress()" class="shrink-0 text-[11px] font-bold bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-700 transition-colors">Copy</button>
+        <code id="btc-address" class="mono text-xs break-all flex-1 select-all" style="color:var(--lime)">bc1qhdczc6na0s8thuql98g00g74shqsg8nuqrml75</code>
+        <button onclick="copyBtcAddress()" class="shrink-0 text-xs font-bold rounded-lg px-3 py-1.5" style="background:var(--surface2);border:1px solid var(--border)">Copy</button>
       </div>
-      <div id="btc-copied" class="hidden text-[11px] text-emerald-400 mt-2">Address copied ✓</div>
+      <div id="btc-copied" class="hidden text-xs mt-2" style="color:var(--lime)">Address copied &#10003;</div>
     </div>
-    <p class="text-xs text-slate-500">Card/donor-wall options coming soon. Every contribution keeps the player free.</p>
+    <p class="text-xs" style="color:var(--faint)">Card/donor-wall options coming soon. Every contribution keeps the player free.</p>
   </div>
 </div>
+
+<!-- ============ BROWSE / RESULTS ============ -->
+<main id="search-view" class="flex-1 overflow-y-auto" style="min-height:0">
+  <div class="max-w-1600 mx-auto px-4 py-3">
+    <div class="api-bar mb-6">
+      <span class="api-live"></span>
+      <span class="font-bold" style="color:var(--lime)">ARCHIVE.ORG</span>
+      <span id="current-api-url" class="truncate opacity-80 select-all flex-1">&mdash;</span>
+      <button onclick="copyApiUrl()" class="shrink-0 hover:text-white transition-colors" title="Copy API URL" style="color:var(--faint)">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      </button>
+    </div>
+
+    <!-- rails browse view (default) -->
+    <div id="browse-rails"></div>
+
+    <!-- search results grid -->
+    <div id="results-wrap" class="hidden">
+      <div class="rail-head mb-4">
+        <h2 class="rail-title">Search <span class="accent">results</span></h2>
+        <span id="results-count" class="rail-meta"></span>
+      </div>
+      <div id="results-grid" class="grid grid-results"></div>
+    </div>
+
+    <div id="empty-state" class="hidden py-24 text-center">
+      <div class="display text-2xl font-bold uppercase mb-2" style="letter-spacing:.05em;color:var(--muted)">No broadcasts found</div>
+      <div class="text-sm" style="color:var(--faint)">Try a different search, or enable more stations.</div>
+    </div>
+    <div id="pagination" class="mt-10 mb-6 hidden text-center">
+      <button onclick="loadMore()" class="btn-ghost" style="padding:.8rem 2.6rem">Load more</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ PLAYER (THEATER) ============ -->
+<div id="player-view" class="fixed inset-0 z-100 hidden overflow-y-auto">
+  <div class="max-w-1600 mx-auto px-4 py-4">
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <button onclick="goBack()" class="pill">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        Back to browse
+      </button>
+      <a id="archive-source-link" href="#" target="_blank" rel="noopener" class="pill">
+        Archive.org
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      </a>
+    </div>
+
+    <div class="theater-grid">
+      <div class="min-w-0">
+        <div class="mb-3">
+          <div class="flex items-center gap-2 flex-wrap mb-2">
+            <span id="p-channel" class="station-badge" style="position:static"></span>
+            <span id="p-date-ui" class="mono text-xs font-bold" style="color:var(--lime)"></span>
+            <span id="p-time-ui" class="mono text-xs font-bold" style="color:var(--faint)"></span>
+          </div>
+          <h2 id="p-title" class="display text-2xl font-bold uppercase truncate" style="letter-spacing:.03em"></h2>
+        </div>
+
+        <div class="vid-stack" id="vid-wrap">
+          <video id="vid-a" class="is-active" playsinline preload="metadata" aria-label="NewsDork player"></video>
+          <video id="vid-b" playsinline preload="metadata" aria-hidden="true" tabindex="-1"></video>
+
+          <div id="player-error" class="hidden absolute inset-0 flex-col items-center justify-center gap-3 text-center p-6" style="background:rgba(0,0,0,.85)">
+            <div class="display text-xl font-bold uppercase" style="color:#ff6b6b;letter-spacing:.06em">Playback unavailable</div>
+            <div id="player-error-msg" class="text-xs max-w-md" style="color:var(--muted)"></div>
+            <button onclick="retryPlayback()" class="btn-lime mt-2">Retry</button>
+          </div>
+
+          <button id="big-play-btn" onclick="togglePlayPause()" class="hidden absolute inset-0 m-auto rounded-full items-center justify-center" style="display:none;width:5rem;height:5rem;background:rgba(200,245,66,.9);transition:transform .15s" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform=''">
+            <svg id="big-play-icon" class="w-9 h-9" style="margin-left:.25rem;color:#131a05" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="big-pause-icon" class="w-9 h-9" style="display:none;color:#131a05" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+
+          <div class="ctrl-bar">
+            <div class="progress-track" id="progress-track">
+              <div class="progress-rail" id="progress-rail">
+                <div class="progress-fill" id="progress-fill"></div>
+                <div id="progress-ticks"></div>
+                <div class="progress-knob" id="progress-knob" style="left:0%"></div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 mt-1">
+              <button onclick="togglePlayPause()" class="shrink-0 transition-colors" style="color:var(--text)" title="Play/Pause (space)">
+                <svg id="ctrl-play-icon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24" style="display:none"><path d="M8 5v14l11-7z"/></svg>
+                <svg id="ctrl-pause-icon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              </button>
+              <button onclick="skipSeconds(-10)" class="shrink-0 transition-colors" style="color:var(--muted)" title="Back 10s">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"/></svg>
+              </button>
+              <button onclick="skipSeconds(10)" class="shrink-0 transition-colors" style="color:var(--muted)" title="Forward 10s">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"/></svg>
+              </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <button onclick="toggleMute()" class="transition-colors" style="color:var(--muted)" title="Mute (m)">
+                  <svg id="vol-icon" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                  <svg id="mute-icon" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+                </button>
+                <input type="range" min="0" max="1" step="0.05" value="1" class="vol" id="vol-slider" oninput="setVolume(parseFloat(this.value))" aria-label="Volume">
+              </div>
+              <div id="timestamp-ui" class="mono whitespace-nowrap" style="font-size:.68rem;font-weight:700;color:var(--muted)">00:00:00 / 00:00:00</div>
+              <div class="flex-1"></div>
+              <button onclick="toggleFullscreen()" class="shrink-0 transition-colors" style="color:var(--muted)" title="Fullscreen (f)">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="chapters-head" class="mt-4 mb-2 flex items-center justify-between">
+          <span class="eyebrow">Chapters &mdash; 5 min segments</span>
+          <span id="seg-count" class="mono" style="font-size:.66rem;color:var(--faint)"></span>
+        </div>
+        <div id="seg-list" class="chapter-strip flex gap-2 overflow-x-auto pb-3"></div>
+      </div>
+
+      <aside class="min-w-0">
+        <div class="rounded-2xl p-5" style="background:var(--surface);border:1px solid var(--border-soft)">
+          <div class="eyebrow mb-1" style="color:var(--lime)">Broadcast record</div>
+          <div id="prov-rows"></div>
+          <button onclick="copyArchiveUrl()" class="btn-ghost w-full mt-4" style="text-align:center">Copy archive.org URL</button>
+          <div id="prov-copied" class="hidden text-xs mt-2 text-center" style="color:var(--lime)">URL copied &#10003;</div>
+        </div>
+        <div class="rounded-2xl p-5 mt-4" style="background:var(--surface);border:1px solid var(--border-soft)">
+          <div class="eyebrow mb-2" style="color:var(--lime)">About this player</div>
+          <p class="text-xs" style="color:var(--muted);line-height:1.6">Streams the broadcast in 5-minute slices with near-gapless handoff. Chapters below jump between slices instantly.</p>
+        </div>
+      </aside>
+    </div>
+    <div style="height:2rem"></div>
+  </div>
+</div>
+
 <script>
 function toggleDonateModal() {
   document.getElementById('donate-modal').classList.toggle('hidden');
@@ -260,121 +518,21 @@ document.getElementById('donate-modal').addEventListener('click', function(e) {
 });
 </script>
 
-<!-- ============ RESULTS VIEW ============ -->
-<main id="search-view" class="flex-1 min-h-0 overflow-y-auto">
-  <div class="max-w-[1600px] mx-auto p-4 sm:p-6">
-    <div class="api-bar flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 mb-5 text-[11px] text-slate-500">
-      <span class="text-blue-500 font-bold px-2 py-0.5 bg-blue-500/10 rounded shrink-0">API</span>
-      <span id="current-api-url" class="truncate opacity-80 select-all">—</span>
-      <button onclick="copyApiUrl()" class="ml-auto shrink-0 hover:text-white transition-colors" title="Copy URL">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-      </button>
-    </div>
-    <div id="results-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5"></div>
-    <div id="station-rows" class="hidden flex-col gap-9"></div>
-    <div id="empty-state" class="hidden py-24 text-center text-slate-500 text-xs font-black uppercase tracking-widest">No broadcasts found</div>
-    <div id="pagination" class="mt-10 mb-4 hidden text-center">
-      <button onclick="loadMore()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-10 py-3 hover:bg-slate-700 transition-colors">Load more</button>
-    </div>
-  </div>
-</main>
-
-<!-- ============ PLAYER VIEW ============ -->
-<div id="player-view" class="fixed inset-0 z-[100] bg-slate-950 hidden overflow-y-auto">
-  <div class="max-w-5xl mx-auto px-3 sm:px-4 py-4 flex flex-col min-h-full">
-    <div class="flex items-center justify-between gap-3 mb-4">
-      <button onclick="goBack()" class="flex items-center gap-2 bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-slate-800 transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        Back
-      </button>
-      <a id="archive-source-link" href="#" target="_blank" rel="noopener" class="flex items-center gap-2 bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-slate-800 transition-colors">
-        Archive.org
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-      </a>
-    </div>
-
-    <div class="mb-4 min-w-0">
-      <div class="flex items-center gap-2 flex-wrap">
-        <span id="p-channel" class="bg-blue-600 px-2 py-0.5 rounded text-[10px] font-black text-white uppercase"></span>
-        <span id="p-date-ui" class="text-xs font-bold text-blue-400 mono"></span>
-        <span id="p-time-ui" class="text-xs font-bold text-slate-500 mono"></span>
-      </div>
-      <h2 id="p-title" class="text-xl font-black text-white uppercase tracking-tight truncate mt-1"></h2>
-    </div>
-
-    <div class="vid-stack group" id="vid-wrap">
-      <video id="vid-a" class="is-active" playsinline preload="metadata" aria-label="NewsDork player"></video>
-      <video id="vid-b" playsinline preload="metadata" aria-hidden="true" tabindex="-1"></video>
-
-      <div id="player-error" class="hidden absolute inset-0 flex-col items-center justify-center gap-3 bg-black/80 text-center p-6">
-        <div class="text-red-400 text-sm font-black uppercase tracking-widest">Playback unavailable</div>
-        <div id="player-error-msg" class="text-slate-400 text-xs max-w-md"></div>
-        <button onclick="retryPlayback()" class="mt-2 text-[11px] font-black uppercase tracking-wider bg-blue-600 rounded-full px-6 py-2 hover:bg-blue-500">Retry</button>
-      </div>
-
-      <button id="big-play-btn" onclick="togglePlayPause()" class="hidden absolute inset-0 m-auto w-20 h-20 rounded-full bg-blue-600/85 hover:bg-blue-600 text-white items-center justify-center transition-transform hover:scale-105" style="display:none">
-        <svg id="big-play-icon" class="w-9 h-9 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        <svg id="big-pause-icon" class="w-9 h-9" fill="currentColor" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-      </button>
-
-      <div class="ctrl-bar">
-        <div class="progress-track" id="progress-track">
-          <div class="progress-rail">
-            <div class="progress-fill" id="progress-fill"></div>
-            <div class="progress-knob" id="progress-knob" style="left:0%"></div>
-          </div>
-        </div>
-        <div class="flex items-center gap-3 mt-1">
-          <button onclick="togglePlayPause()" class="text-white hover:text-blue-400 transition-colors shrink-0" title="Play/Pause (space)">
-            <svg id="ctrl-play-icon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24" style="display:none"><path d="M8 5v14l11-7z"/></svg>
-            <svg id="ctrl-pause-icon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-          </button>
-          <button onclick="skipSeconds(-10)" class="text-slate-300 hover:text-white transition-colors shrink-0" title="Back 10s">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"/></svg>
-          </button>
-          <button onclick="skipSeconds(10)" class="text-slate-300 hover:text-white transition-colors shrink-0" title="Forward 10s">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"/></svg>
-          </button>
-          <div class="flex items-center gap-2 shrink-0">
-            <button onclick="toggleMute()" class="text-slate-300 hover:text-white transition-colors" title="Mute (m)">
-              <svg id="vol-icon" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
-              <svg id="mute-icon" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
-            </button>
-            <input type="range" min="0" max="1" step="0.05" value="1" class="vol hidden sm:block" id="vol-slider" oninput="setVolume(parseFloat(this.value))">
-          </div>
-          <div id="timestamp-ui" class="text-[11px] font-bold text-slate-300 mono whitespace-nowrap">00:00:00 / 00:00:00</div>
-          <div class="flex-1"></div>
-          <button onclick="toggleFullscreen()" class="text-slate-300 hover:text-white transition-colors shrink-0" title="Fullscreen (f)">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div id="chapters-head" class="mt-4 mb-2 flex items-center justify-between">
-      <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Chapters</span>
-      <span id="seg-count" class="text-[10px] font-bold text-slate-600 mono"></span>
-    </div>
-    <div id="seg-list" class="chapter-strip flex gap-2 overflow-x-auto pb-3"></div>
-    <div class="h-6"></div>
-  </div>
-</div>
-
 <script>
 /* ================= CONFIG ================= */
 const CONFIG = {
   API_SEARCH: 'https://archive.org/advancedsearch.php',
   API_META: 'https://archive.org/metadata/',
   DL_BASE: 'https://archive.org/download/',
-  SEGMENT_LENGTH: 300,          // 5-minute slices, like the POC
-  STAGE_AHEAD_SECONDS: 25,      // start preloading the next slice this far before handoff
+  SEGMENT_LENGTH: 300,          // 5-minute slices
+  STAGE_AHEAD_SECONDS: 25,
   PAGE_SIZE: 48,
+  RAIL_CAP: 14,                 // cards per rail
   STATIONS: {
     "CNNW": "CNN", "FOXNEWSW": "FOX NEWS", "MSNOW": "MS NOW", "CNBC": "CNBC",
     "BLOOMBERG": "BLOOMBERG", "FBC": "FOX BIZ", "COM": "COMEDY",
     "CSPAN": "C-SPAN", "CSPAN2": "C-SPAN2"
   },
-  // brand colors for station badges (bg, fg)
   STATION_STYLE: {
     "CNNW":     ["#CC0000", "#ffffff"],
     "FOXNEWSW": ["#1D4ED8", "#ffffff"],
@@ -385,13 +543,19 @@ const CONFIG = {
     "COM":      ["#EAB308", "#111827"],
     "CSPAN":    ["#6B7280", "#ffffff"],
     "CSPAN2":   ["#4B5563", "#ffffff"]
-  }
+  },
+  DECADES: [
+    ["2020s", "2020-01-01", "2029-12-31"],
+    ["2010s", "2010-01-01", "2019-12-31"],
+    ["2000s", "2000-01-01", "2009-12-31"],
+    ["1990s", "1990-01-01", "1999-12-31"],
+    ["1980s", "1980-01-01", "1989-12-31"]
+  ]
 };
 const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" fill="#0f172a"/><text x="50%" y="52%" fill="#334155" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle">NEWSDORK</text></svg>');
+  '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" fill="#10141c"/><text x="50%" y="52%" fill="#2a3342" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle">NEWSDORK</text></svg>');
 
-/* low-spec: unload thumbnails far outside the viewport so long grids don't pin
-   decoded bitmaps in RAM. Restores the real image ~800px before it scrolls in. */
+/* low-spec thumbnail memory management (unchanged from v1) */
 const thumbObserver = ('IntersectionObserver' in window) ? new IntersectionObserver((entries) => {
   for (const e of entries) {
     const img = e.target;
@@ -409,26 +573,26 @@ const observeThumb = (img) => {
 };
 const thumbLoadFailed = (img) => {
   img.onerror = null;
-  img.dataset.src = PLACEHOLDER_IMG; // don't restore a broken URL later
+  img.dataset.src = PLACEHOLDER_IMG;
   img.src = PLACEHOLDER_IMG;
 };
 
 const state = {
   page: 1,
-  view: 'grid',            // 'grid' | 'rows' (one horizontal carousel per station)
+  searching: false,       // true when a text query is active (grid mode); false = rails browse
   allItems: [],
   filterNoise: true,
-  // player
+  browseToken: 0,         // guards against stale decade rails after navigation
   isPlayerOpen: false,
   activeId: null,
   file: null,
   duration: 0,
   currentStart: 0,
-  activeEl: null,      // currently visible <video>
-  stagerEl: null,      // hidden <video> preloading the next slice
-  stagedStart: null,   // which segment start the stager currently holds
+  activeEl: null,
+  stagerEl: null,
+  stagedStart: null,
   stagerReady: false,
-  loadToken: 0,        // guards against stacked load listeners
+  loadToken: 0,
   volume: 1,
   muted: false
 };
@@ -442,6 +606,7 @@ const formatTime = (s) => {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 };
 const sanitizeTerm = (t) => t.replace(/["():\[\]{}^~*?\\\/]/g, ' ').replace(/\s+/g, ' ').trim();
+const goHome = () => { $('searchInput').value = ''; resetAndSearch(); window.scrollTo({ top: 0 }); };
 
 /* ================= INIT ================= */
 window.addEventListener('DOMContentLoaded', () => {
@@ -456,7 +621,6 @@ window.addEventListener('DOMContentLoaded', () => {
   resetAndSearch();
   $('progress-track').addEventListener('click', handleSeek);
   document.addEventListener('keydown', onKeyDown);
-  // close station dropdown on outside click
   document.addEventListener('click', (e) => {
     const wrap = $('station-wrap');
     if (!wrap.contains(e.target)) $('channel-dropdown').classList.add('hidden');
@@ -465,13 +629,20 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function onKeyDown(e) {
-  if (!state.isPlayerOpen) return;
-  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
-  if (e.code === 'Space') { e.preventDefault(); togglePlayPause(); }
-  else if (e.key === 'ArrowRight') skipSeconds(10);
-  else if (e.key === 'ArrowLeft') skipSeconds(-10);
-  else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
-  else if (e.key === 'm' || e.key === 'M') toggleMute();
+  if (state.isPlayerOpen) {
+    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+    if (e.code === 'Space') { e.preventDefault(); togglePlayPause(); }
+    else if (e.key === 'ArrowRight') skipSeconds(10);
+    else if (e.key === 'ArrowLeft') skipSeconds(-10);
+    else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+    else if (e.key === 'm' || e.key === 'M') toggleMute();
+    return;
+  }
+  // global: Cmd/Ctrl+K or "/" focuses search
+  if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || ''))) {
+    e.preventDefault();
+    $('searchInput').focus();
+  }
 }
 
 /* ================= SEARCH ================= */
@@ -480,21 +651,47 @@ function renderStations() {
   container.innerHTML = '';
   Object.entries(CONFIG.STATIONS).forEach(([id, name]) => {
     const label = document.createElement('label');
-    label.className = 'flex items-center justify-between gap-2 p-2 hover:bg-slate-800 rounded-lg cursor-pointer';
+    label.className = 'flex items-center justify-between gap-2 p-2 rounded-lg cursor-pointer';
+    label.style.transition = 'background .12s';
+    label.onmouseover = () => label.style.background = 'var(--surface)';
+    label.onmouseout = () => label.style.background = '';
     const span = document.createElement('span');
-    span.className = 'text-[11px] font-bold text-slate-400 uppercase';
+    span.className = 'text-xs font-bold uppercase';
+    span.style.color = 'var(--muted)';
     span.textContent = name;
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = `TV-${id}`; cb.checked = true;
-    cb.className = 'station-cb w-4 h-4 accent-blue-600 shrink-0';
+    cb.className = 'station-cb w-4 h-4 shrink-0';
+    cb.style.accentColor = 'var(--lime)';
     cb.onchange = resetAndSearch;
     label.appendChild(span); label.appendChild(cb);
     container.appendChild(label);
   });
 }
 
-const resetAndSearch = () => { state.page = 1; state.allItems = []; if (state.view === 'rows') searchRows(); else search(); };
-const loadMore = () => { if (state.view !== 'grid') return; state.page++; search(true); };
+const checkedCollections = () =>
+  Array.from(document.querySelectorAll('.station-cb:checked')).map(c => `collection:${c.value}`);
+
+const resetAndSearch = () => {
+  state.page = 1;
+  state.allItems = [];
+  const term = sanitizeTerm($('searchInput').value.trim());
+  state.searching = term.length > 0;
+  if (state.searching) search();
+  else browseRails();
+};
+const loadMore = () => { if (!state.searching) return; state.page++; search(true); };
+
+function showBrowse() {
+  $('browse-rails').classList.remove('hidden');
+  $('results-wrap').classList.add('hidden');
+  $('pagination').classList.add('hidden');
+  $('empty-state').classList.add('hidden');
+}
+function showResults() {
+  $('browse-rails').classList.add('hidden');
+  $('results-wrap').classList.remove('hidden');
+}
 
 function renderSkeletons(n, append = false) {
   const grid = $('results-grid');
@@ -502,9 +699,9 @@ function renderSkeletons(n, append = false) {
   for (let i = 0; i < n; i++) {
     const d = document.createElement('div');
     d.className = 'card skel';
-    d.innerHTML = `<div class="aspect-video rounded-xl skeleton"></div>
-      <div class="mt-2 h-3 rounded skeleton w-3/4"></div>
-      <div class="mt-1.5 h-2.5 rounded skeleton w-1/2"></div>`;
+    d.innerHTML = `<div class="thumb skeleton" style="aspect-ratio:16/9"></div>
+      <div class="mt-2 h-3 rounded skeleton w-3/4" style="height:.75rem"></div>
+      <div class="mt-1.5 h-2.5 rounded skeleton w-1/2" style="height:.6rem"></div>`;
     grid.appendChild(d);
   }
 }
@@ -512,19 +709,45 @@ function clearSkeletons() {
   document.querySelectorAll('#results-grid .skel').forEach(e => e.remove());
 }
 
-// Builds the archive.org search query. Clean Feed's transcode filter lives here:
-// the search index labels every derived MP4 with format "h.264" (verified
-// across all 9 stations — untranscoded items only carry MPEGTS/Metadata/XML),
-// so results arrive pre-filtered from the single search request. The filter
-// applies as results load, never after the fact, with zero extra requests.
-function buildQuery(term, channels) {
+function renderRailSkeletons() {
+  const wrap = $('browse-rails');
+  wrap.innerHTML = '';
+  for (let r = 0; r < 3; r++) {
+    const sec = document.createElement('section');
+    sec.className = 'rail';
+    sec.innerHTML = `<div class="rail-head"><div class="skeleton" style="height:1.6rem;width:12rem;border-radius:.4rem"></div></div>
+      <div class="flex gap-4 overflow-hidden">${'<div class="shrink-0" style="width:17rem"><div class="skeleton" style="aspect-ratio:16/9;border-radius:14px"></div><div class="skeleton mt-2" style="height:.75rem;width:70%;border-radius:.3rem"></div></div>'.repeat(5)}</div>`;
+    wrap.appendChild(sec);
+  }
+}
+
+// Clean Feed's transcode filter: the search index labels every derived MP4 with
+// format "h.264", so results arrive pre-filtered from the single request.
+function buildQuery(term, channels, dateRange) {
   let q = `mediatype:movies AND (${channels.join(' OR ')})`;
   if (term) q += ` AND (title:(${term}) OR description:(${term}))`;
+  if (dateRange) q += ` AND date:[${dateRange[0]} TO ${dateRange[1]}]`;
   if (state.filterNoise) q += ` AND format:"h.264"`;
   return q;
 }
 
+async function iaSearch(q, rows, page = 1) {
+  const params = new URLSearchParams({
+    q,
+    'fl[]': ['identifier', 'title', 'date', 'publicdate'],
+    sort: 'publicdate desc',
+    rows, page, output: 'json'
+  });
+  const fullUrl = `${CONFIG.API_SEARCH}?${params}`;
+  $('current-api-url').textContent = fullUrl;
+  const res = await fetch(fullUrl);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return data?.response?.docs || [];
+}
+
 async function search(append = false) {
+  showResults();
   const grid = $('results-grid');
   const pag = $('pagination');
   const empty = $('empty-state');
@@ -532,42 +755,144 @@ async function search(append = false) {
   renderSkeletons(append ? 6 : 12, append);
 
   const term = sanitizeTerm($('searchInput').value.trim());
-  const channels = Array.from(document.querySelectorAll('.station-cb:checked')).map(c => `collection:${c.value}`);
-
+  const channels = checkedCollections();
   if (channels.length === 0) {
     clearSkeletons();
     empty.classList.remove('hidden');
-    empty.textContent = 'No stations selected';
+    empty.querySelector('.display').textContent = 'No stations selected';
     return;
   }
-
-  let q = buildQuery(term, channels);
-
-  const params = new URLSearchParams({
-    q,
-    'fl[]': ['identifier', 'title', 'date', 'publicdate'],
-    sort: 'publicdate desc',
-    rows: CONFIG.PAGE_SIZE,
-    page: state.page,
-    output: 'json'
-  });
-  const fullUrl = `${CONFIG.API_SEARCH}?${params}`;
-  $('current-api-url').textContent = fullUrl;
-
   try {
-    const res = await fetch(fullUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const docs = data?.response?.docs || [];
-    if (docs.length === 0 && !append) empty.classList.remove('hidden');
+    const docs = await iaSearch(buildQuery(term, channels), CONFIG.PAGE_SIZE, state.page);
+    if (docs.length === 0 && !append) {
+      empty.classList.remove('hidden');
+      empty.querySelector('.display').textContent = 'No broadcasts found';
+    }
     renderItems(docs, append);
+    $('results-count').textContent = `${state.allItems.length} broadcasts`;
     if (docs.length >= CONFIG.PAGE_SIZE) pag.classList.remove('hidden');
   } catch (e) {
     console.error('Search failed', e);
-    if (!append) { empty.classList.remove('hidden'); empty.textContent = 'Search failed — check connection and retry'; }
+    if (!append) {
+      empty.classList.remove('hidden');
+      empty.querySelector('.display').textContent = 'Search failed — check connection and retry';
+    }
   } finally {
     clearSkeletons();
   }
+}
+
+/* ================= RAILS BROWSE ================= */
+async function browseRails() {
+  showBrowse();
+  renderRailSkeletons();
+  const channels = checkedCollections();
+  if (channels.length === 0) {
+    $('browse-rails').innerHTML = '';
+    const empty = $('empty-state');
+    empty.classList.remove('hidden');
+    empty.querySelector('.display').textContent = 'No stations selected';
+    return;
+  }
+  const token = ++state.browseToken;
+  try {
+    const docs = await iaSearch(buildQuery('', channels), CONFIG.RAIL_CAP * Object.keys(CONFIG.STATIONS).length, 1);
+    const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
+    state.allItems = items;
+    updateShowDropdown();
+    renderRails(items);
+    fetchDecades(channels, token); // fills in below as each resolves
+  } catch (e) {
+    console.error('Rails failed', e);
+    $('browse-rails').innerHTML = '';
+    const empty = $('empty-state');
+    empty.classList.remove('hidden');
+    empty.querySelector('.display').textContent = 'Search failed — check connection and retry';
+  }
+}
+
+async function fetchDecades(channels, token) {
+  const jobs = CONFIG.DECADES.map(async ([label, from, to]) => {
+    try {
+      const docs = await iaSearch(buildQuery('', channels, [from, to]), 10, 1);
+      return { label, items: docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) })) };
+    } catch (e) { return { label, items: [] }; }
+  });
+  for (const job of jobs) {
+    const { label, items } = await job;
+    if (token !== state.browseToken) return; // user navigated away; drop stale rails
+    if (items.length) appendRail(`${label} archive`, `${items.length} broadcasts`, items);
+  }
+}
+
+function railSection(title, accentWord, meta, items) {
+  const section = document.createElement('section');
+  section.className = 'rail';
+  const head = document.createElement('div');
+  head.className = 'rail-head';
+  const h = document.createElement('h2');
+  h.className = 'rail-title';
+  h.innerHTML = accentWord
+    ? `${escapeHtml(title)} <span class="accent">${escapeHtml(accentWord)}</span>`
+    : escapeHtml(title);
+  const m = document.createElement('span');
+  m.className = 'rail-meta';
+  m.textContent = meta;
+  const nav = document.createElement('div');
+  nav.className = 'rail-nav';
+  const prev = document.createElement('button');
+  prev.className = 'rail-btn';
+  prev.setAttribute('aria-label', `Scroll ${title} left`);
+  prev.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>';
+  const next = document.createElement('button');
+  next.className = 'rail-btn';
+  next.setAttribute('aria-label', `Scroll ${title} right`);
+  next.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
+  nav.append(prev, next);
+  head.append(h, m, nav);
+  const strip = document.createElement('div');
+  strip.className = 'rail-strip';
+  items.forEach(it => {
+    const card = buildCard(it.doc, it.meta);
+    card.style.width = '17rem';
+    card.style.flexShrink = '0';
+    strip.appendChild(card);
+  });
+  const scrollAmt = () => Math.max(320, strip.clientWidth * 0.8);
+  prev.onclick = () => strip.scrollBy({ left: -scrollAmt(), behavior: 'smooth' });
+  next.onclick = () => strip.scrollBy({ left: scrollAmt(), behavior: 'smooth' });
+  const syncNav = () => {
+    prev.disabled = strip.scrollLeft <= 4;
+    next.disabled = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4;
+  };
+  strip.addEventListener('scroll', syncNav, { passive: true });
+  requestAnimationFrame(syncNav);
+  section.append(head, strip);
+  return section;
+}
+
+function appendRail(title, meta, items) {
+  $('browse-rails').appendChild(railSection(title, '', meta, items));
+  applyShowFilter();
+}
+
+function renderRails(items) {
+  const wrap = $('browse-rails');
+  wrap.innerHTML = '';
+  const checked = new Set(
+    Array.from(document.querySelectorAll('.station-cb:checked')).map(c => c.value.replace('TV-', ''))
+  );
+  // TRENDING NOW — latest across all checked stations
+  const trending = items.slice(0, CONFIG.RAIL_CAP);
+  if (trending.length) wrap.appendChild(railSection('Trending', 'now', `${trending.length} latest broadcasts`, trending));
+  // one rail per station
+  Object.keys(CONFIG.STATIONS).forEach(k => {
+    if (!checked.has(k)) return;
+    const list = items.filter(it => it.meta.stationKey === k).slice(0, CONFIG.RAIL_CAP);
+    if (!list.length) return;
+    wrap.appendChild(railSection(`The ${CONFIG.STATIONS[k]}`, 'collection', `${list.length} recent`, list));
+  });
+  applyShowFilter();
 }
 
 function parseMeta(fullTitle, identifier = '') {
@@ -575,13 +900,11 @@ function parseMeta(fullTitle, identifier = '') {
   const showName = (parts[0] || 'Unknown Show').trim();
   const stationPart = (parts[1] || '').trim();
   const metaBlock = parts.slice(2).join(' : ').trim();
-  // identifier prefix (e.g. CSPAN_2026...) is the reliable station key; title parsing is the fallback
   let stationId = (identifier.split('_')[0] || '');
   if (!CONFIG.STATIONS[stationId]) stationId = stationPart.split(' ')[0].replace('TV-', '');
   const channelLabel = CONFIG.STATIONS[stationId] || 'TV';
   const lowTitle = fullTitle.toLowerCase();
-  const noiseKeywords = [];
-  const isNoise = (channelLabel === 'TV') || noiseKeywords.some(k => lowTitle.includes(k));
+  const isNoise = (channelLabel === 'TV');
 
   let dateStr = '', timeStr = '';
   if (metaBlock) {
@@ -591,19 +914,17 @@ function parseMeta(fullTitle, identifier = '') {
       timeStr = metaBlock.replace(dateStr, '').trim();
     } else { dateStr = metaBlock; }
   }
+  void lowTitle;
   return { show: showName, channel: channelLabel, stationKey: CONFIG.STATIONS[stationId] ? stationId : '', date: dateStr.toUpperCase(), time: timeStr.toUpperCase(), isNoise };
 }
 
 // Renders one page of search results instantly: a single search request, zero
-// per-item network calls. That was the original design, and it's what made it
-// fast — per-item transcode probing cost ~6s per page (measured: archive.org
-// throttles those tiny requests, so no concurrency level helps) and made cards
-// trickle in one by one. Playability of very recent broadcasts is confirmed at
-// click time by the player, which already reports "no playable video file"
-// honestly. Clean Feed's title-noise filter applies via CSS (.hide-noise).
+// per-item network calls (per-item transcode probing cost ~6s/page — archive.org
+// throttles those tiny requests, so no concurrency level helps). Playability of
+// very recent broadcasts is confirmed at click time by the player.
 function renderItems(docs, append = false) {
   const grid = $('results-grid');
-  clearSkeletons(); // remove skeleton placeholders
+  clearSkeletons();
   if (!append) grid.innerHTML = '';
   const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
   if (!append) state.allItems = items; else items.forEach(it => state.allItems.push(it));
@@ -614,219 +935,78 @@ function renderItems(docs, append = false) {
 
 // Builds a result card element (not attached — the caller places it).
 function buildCard(doc, m) {
-    const card = document.createElement('div');
-    card.className = `card group cursor-pointer ${m.isNoise ? 'noise-item' : ''}`;
-    card.setAttribute('data-show-name', m.show);
-    card.setAttribute('data-identifier', doc.identifier);
+  const card = document.createElement('div');
+  card.className = `card group${m.isNoise ? ' noise-item' : ''}`;
+  card.setAttribute('data-show-name', m.show);
+  card.setAttribute('data-identifier', doc.identifier);
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('role', 'button');
+  card.setAttribute('aria-label', `Play ${m.show}`);
 
-    const thumb = document.createElement('div');
-    thumb.className = 'relative aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-900';
+  const thumb = document.createElement('div');
+  thumb.className = 'thumb';
 
-    // Skeleton shimmer behind the thumbnail: thumbnails are tiny (~2-8KB) but
-    // each costs a redirect + TTFB, so this keeps the card from looking broken
-    // while the image arrives. Fades out on load (or on error -> placeholder).
-    const ph = document.createElement('div');
-    ph.className = 'absolute inset-0 skeleton';
-    thumb.appendChild(ph);
-    let phGone = false;
-    const clearPh = () => {
-      if (phGone) return;
-      phGone = true;
-      ph.style.transition = 'opacity .3s ease';
-      ph.style.opacity = '0';
-      setTimeout(() => ph.remove(), 320);
-    };
+  const ph = document.createElement('div');
+  ph.className = 'absolute inset-0 skeleton';
+  thumb.appendChild(ph);
+  let phGone = false;
+  const clearPh = () => {
+    if (phGone) return;
+    phGone = true;
+    ph.style.transition = 'opacity .3s ease';
+    ph.style.opacity = '0';
+    setTimeout(() => ph.remove(), 320);
+  };
 
-    const img = document.createElement('img');
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    img.alt = '';
-    img.className = 'thumb-img w-full h-full object-cover opacity-80 group-hover:opacity-100';
-    img.onload = clearPh;
-    img.onerror = () => { thumbLoadFailed(img); clearPh(); };
-    img.src = `https://archive.org/services/img/${doc.identifier}`;
-    observeThumb(img);
-    thumb.appendChild(img);
+  const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.alt = '';
+  img.className = 'thumb-img';
+  img.onload = clearPh;
+  img.onerror = () => { thumbLoadFailed(img); clearPh(); };
+  img.src = `https://archive.org/services/img/${doc.identifier}`;
+  observeThumb(img);
+  thumb.appendChild(img);
+  thumb.appendChild(Object.assign(document.createElement('div'), { className: 'thumb-gradient' }));
 
-    const grad = document.createElement('div');
-    grad.className = 'thumb-gradient absolute inset-0 pointer-events-none';
-    thumb.appendChild(grad);
+  const badge = document.createElement('div');
+  badge.className = 'station-badge';
+  const [bg, fg] = CONFIG.STATION_STYLE[m.stationKey] || ['#2563eb', '#ffffff'];
+  badge.style.backgroundColor = bg; badge.style.color = fg;
+  badge.textContent = m.channel;
+  thumb.appendChild(badge);
 
-    const badge = document.createElement('div');
-    badge.className = 'absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tight';
-    const [bg, fg] = CONFIG.STATION_STYLE[m.stationKey] || ['#2563eb', '#ffffff'];
-    badge.style.backgroundColor = bg; badge.style.color = fg;
-    badge.textContent = m.channel;
-    thumb.appendChild(badge);
+  const po = document.createElement('div');
+  po.className = 'play-overlay';
+  po.innerHTML = '<div class="po-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="#c8f542"><path d="M8 5v14l11-7z"/></svg></div>';
+  thumb.appendChild(po);
+  card.appendChild(thumb);
 
-    const po = document.createElement('div');
-    po.className = 'play-overlay';
-    po.innerHTML = '<div class="po-circle"><svg class="w-6 h-6 ml-0.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>';
-    thumb.appendChild(po);
+  const meta = document.createElement('div');
+  meta.className = 'card-meta';
+  const h4 = document.createElement('div');
+  h4.className = 'card-show';
+  h4.textContent = m.show;
+  const sub = document.createElement('div');
+  sub.className = 'card-sub';
+  const dateSpan = document.createElement('span');
+  dateSpan.textContent = m.date || 'ARCHIVE';
+  const srcLink = document.createElement('a');
+  srcLink.href = `https://archive.org/details/${doc.identifier}`;
+  srcLink.target = '_blank';
+  srcLink.rel = 'noopener';
+  srcLink.title = 'View the original item on archive.org';
+  srcLink.setAttribute('aria-label', `Original archive.org page for ${m.show}`);
+  srcLink.textContent = 'archive.org \u2197';
+  srcLink.addEventListener('click', (e) => e.stopPropagation());
+  sub.append(dateSpan, srcLink);
+  meta.append(h4, sub);
+  card.appendChild(meta);
 
-    if (m.time) {
-      const tb = document.createElement('div');
-      tb.className = 'absolute top-2 right-2 bg-black/80 border border-white/10 px-2 py-0.5 rounded text-[9px] font-black text-slate-100 mono uppercase';
-      tb.textContent = m.time;
-      thumb.appendChild(tb);
-    }
-
-    const cap = document.createElement('div');
-    cap.className = 'absolute bottom-0 left-0 right-0 p-3';
-    const h4 = document.createElement('h4');
-    h4.className = 'text-sm font-black text-white uppercase leading-tight line-clamp-2';
-    h4.textContent = m.show;
-    const d = document.createElement('div');
-    d.className = 'text-[10px] font-bold text-slate-400 mt-1 mono italic opacity-80 flex items-center justify-between gap-2';
-    const dateSpan = document.createElement('span');
-    dateSpan.textContent = m.date;
-    const srcLink = document.createElement('a');
-    srcLink.href = `https://archive.org/details/${doc.identifier}`;
-    srcLink.target = '_blank';
-    srcLink.rel = 'noopener';
-    srcLink.title = 'View the original item on archive.org';
-    srcLink.setAttribute('aria-label', `Original archive.org page for ${m.show}`);
-    srcLink.className = 'shrink-0 text-blue-400 hover:text-blue-500 hover:underline';
-    srcLink.textContent = 'archive.org ↗';
-    srcLink.addEventListener('click', (e) => e.stopPropagation()); // don't open the player too
-    d.appendChild(dateSpan); d.appendChild(srcLink);
-    cap.appendChild(h4); cap.appendChild(d);
-    thumb.appendChild(cap);
-
-    card.appendChild(thumb);
-    card.onclick = () => openPlayer(doc.identifier, doc.title || doc.identifier);
-    return card;
-}
-
-/* ================= STATION ROWS VIEW ================= */
-// One horizontal carousel row per checked station. A single search request
-// (rows = per-station cap x station count) is grouped client-side by station,
-// so the view costs exactly one archive.org query — same as one grid page.
-const ROWS_PER_STATION = 12;
-
-function setView(v) {
-  if (state.view === v) return;
-  state.view = v;
-  const base = 'px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-colors ';
-  $('view-grid-btn').className = base + (v === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white');
-  $('view-rows-btn').className = base + (v === 'rows' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white');
-  $('results-grid').classList.toggle('hidden', v !== 'grid');
-  $('pagination').classList.toggle('hidden', v !== 'grid');
-  const rowsEl = $('station-rows');
-  rowsEl.classList.toggle('hidden', v !== 'rows');
-  rowsEl.classList.toggle('flex', v === 'rows');
-  if (v === 'rows') { state.page = 1; searchRows(); }
-  else { state.page = 1; state.allItems = []; search(); }
-}
-
-function renderRowSkeletons() {
-  const wrap = $('station-rows');
-  wrap.innerHTML = '';
-  const cardSkel = '<div class="w-64 shrink-0"><div class="aspect-video rounded-xl skeleton"></div><div class="mt-2 h-3 rounded skeleton w-3/4"></div></div>';
-  for (let r = 0; r < 3; r++) {
-    const sec = document.createElement('section');
-    sec.innerHTML = `<div class="h-4 w-40 rounded skeleton mb-3"></div>
-      <div class="flex gap-4 overflow-hidden">${cardSkel.repeat(5)}</div>`;
-    wrap.appendChild(sec);
-  }
-}
-
-async function searchRows() {
-  const wrap = $('station-rows');
-  const empty = $('empty-state');
-  empty.classList.add('hidden');
-  renderRowSkeletons();
-
-  const term = sanitizeTerm($('searchInput').value.trim());
-  const channels = Array.from(document.querySelectorAll('.station-cb:checked')).map(c => `collection:${c.value}`);
-
-  if (channels.length === 0) {
-    wrap.innerHTML = '';
-    empty.classList.remove('hidden');
-    empty.textContent = 'No stations selected';
-    return;
-  }
-
-  const q = buildQuery(term, channels);
-  const params = new URLSearchParams({
-    q,
-    'fl[]': ['identifier', 'title', 'date', 'publicdate'],
-    sort: 'publicdate desc',
-    rows: ROWS_PER_STATION * Object.keys(CONFIG.STATIONS).length,
-    page: 1,
-    output: 'json'
-  });
-  const fullUrl = `${CONFIG.API_SEARCH}?${params}`;
-  $('current-api-url').textContent = fullUrl;
-
-  try {
-    const res = await fetch(fullUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const docs = data?.response?.docs || [];
-    renderStationRows(docs);
-    if (!wrap.children.length) { empty.classList.remove('hidden'); empty.textContent = 'No broadcasts found'; }
-  } catch (e) {
-    console.error('Station rows failed', e);
-    wrap.innerHTML = '';
-    empty.classList.remove('hidden');
-    empty.textContent = 'Search failed — check connection and retry';
-  }
-}
-
-function renderStationRows(docs) {
-  const wrap = $('station-rows');
-  wrap.innerHTML = '';
-  const checked = new Set(Array.from(document.querySelectorAll('.station-cb:checked')).map(c => c.value.replace('TV-', '')));
-  const groups = {};
-  Object.keys(CONFIG.STATIONS).forEach(k => { if (checked.has(k)) groups[k] = []; });
-
-  const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
-  state.allItems = items; // keeps the show-filter dropdown populated
-  items.forEach(it => {
-    const k = it.meta.stationKey;
-    if (groups[k] && groups[k].length < ROWS_PER_STATION) groups[k].push(it);
-  });
-  updateShowDropdown();
-
-  Object.keys(CONFIG.STATIONS).forEach(k => {
-    const list = groups[k];
-    if (!list || !list.length) return;
-    const [bg] = CONFIG.STATION_STYLE[k] || ['#2563eb', '#ffffff'];
-    const section = document.createElement('section');
-    section.className = 'station-row';
-    section.setAttribute('data-station', k);
-    const head = document.createElement('div');
-    head.className = 'flex items-center gap-3 mb-3';
-    const chip = document.createElement('span');
-    chip.className = 'w-3 h-3 rounded-sm shrink-0';
-    chip.style.backgroundColor = bg;
-    const h3 = document.createElement('h3');
-    h3.className = 'text-sm font-black uppercase tracking-wider text-white';
-    h3.textContent = CONFIG.STATIONS[k];
-    const count = document.createElement('span');
-    count.className = 'text-[10px] font-bold text-slate-500 mono';
-    count.textContent = `${list.length} recent`;
-    const spacer = document.createElement('div');
-    spacer.className = 'flex-1';
-    const prev = document.createElement('button');
-    prev.className = 'row-nav text-slate-500 hover:text-white transition-colors';
-    prev.setAttribute('aria-label', `Scroll ${CONFIG.STATIONS[k]} row left`);
-    prev.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>';
-    const next = document.createElement('button');
-    next.className = 'row-nav text-slate-500 hover:text-white transition-colors';
-    next.setAttribute('aria-label', `Scroll ${CONFIG.STATIONS[k]} row right`);
-    next.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
-    head.append(chip, h3, count, spacer, prev, next);
-    const strip = document.createElement('div');
-    strip.className = 'station-row-strip';
-    list.forEach(it => strip.appendChild(buildCard(it.doc, it.meta)));
-    prev.onclick = () => strip.scrollBy({ left: -672, behavior: 'smooth' });
-    next.onclick = () => strip.scrollBy({ left: 672, behavior: 'smooth' });
-    section.append(head, strip);
-    wrap.appendChild(section);
-  });
-  applyShowFilter();
+  card.onclick = () => openPlayer(doc.identifier, doc.title || doc.identifier);
+  card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlayer(doc.identifier, doc.title || doc.identifier); } };
+  return card;
 }
 
 /* ================= FILTERS ================= */
@@ -846,23 +1026,27 @@ function updateShowDropdown() {
   dropdown.value = visibleShows.has(currentVal) ? currentVal : 'ALL';
 }
 
+function cardVisible(card, selected) {
+  const matches = selected === 'ALL' || card.getAttribute('data-show-name') === selected;
+  const noiseHidden = state.filterNoise && card.classList.contains('noise-item');
+  return matches && !noiseHidden;
+}
+
 function applyShowFilter() {
   const selected = $('showFilterDropdown').value;
-  document.querySelectorAll('#results-grid > div').forEach(card => {
-    const matches = selected === 'ALL' || card.getAttribute('data-show-name') === selected;
-    card.style.display = matches ? '' : 'none';
+  // search grid
+  document.querySelectorAll('#results-grid > .card').forEach(card => {
+    card.style.display = cardVisible(card, selected) ? '' : 'none';
   });
-  // station rows: filter cards within each row, hide rows left with nothing visible
-  document.querySelectorAll('#station-rows .station-row').forEach(row => {
+  // rails: filter cards within each rail, hide rails left with nothing visible
+  document.querySelectorAll('#browse-rails .rail').forEach(rail => {
     let visible = 0;
-    row.querySelectorAll('.card').forEach(card => {
-      const matches = selected === 'ALL' || card.getAttribute('data-show-name') === selected;
-      const noiseHidden = state.filterNoise && card.classList.contains('noise-item');
-      const show = matches && !noiseHidden;
+    rail.querySelectorAll('.card').forEach(card => {
+      const show = cardVisible(card, selected);
       card.style.display = show ? '' : 'none';
       if (show) visible++;
     });
-    row.style.display = visible ? '' : 'none';
+    rail.style.display = visible ? '' : 'none';
   });
 }
 
@@ -876,16 +1060,29 @@ const toggleDropdown = () => $('channel-dropdown').classList.toggle('hidden');
 function toggleNoiseFilter() {
   state.filterNoise = !state.filterNoise;
   document.body.classList.toggle('hide-noise', state.filterNoise);
-  $('noise-toggle').textContent = state.filterNoise ? 'Clean Feed: ON' : 'Clean Feed: OFF';
+  const btn = $('noise-toggle');
+  btn.classList.toggle('pill-on', state.filterNoise);
+  $('noise-label').textContent = 'Clean Feed';
+  btn.title = state.filterNoise
+    ? 'Clean Feed ON: only broadcasts whose MP4 has finished transcoding'
+    : 'Clean Feed OFF: show everything including untranscoded items';
   resetAndSearch(); // the transcode filter lives in the query — re-run it
 }
 
+</script>
+<script>
 /* ================= PLAYER ================= */
+/* Dual-video preloading engine: plays 5-minute slices back-to-back with
+   near-gapless handoff by staging the next slice in a hidden <video>. */
 const segUrl = (start) => {
   const end = Math.min(start + CONFIG.SEGMENT_LENGTH, state.duration);
   return `${CONFIG.DL_BASE}${state.activeId}/${encodeURIComponent(state.file)}?start=${start}&end=${end}`;
 };
 const currentGlobalTime = () => state.currentStart + (state.activeEl?.currentTime || 0);
+
+function provRow(k, v, hl) {
+  return `<div class="prov-row"><span class="prov-k">${k}</span><span class="prov-v${hl ? ' hl' : ''}">${v}</span></div>`;
+}
 
 async function openPlayer(id, title) {
   state.activeId = id;
@@ -904,6 +1101,12 @@ async function openPlayer(id, title) {
   $('p-date-ui').textContent = m.date;
   $('p-time-ui').textContent = m.time;
   $('archive-source-link').href = `https://archive.org/details/${id}`;
+  $('prov-rows').innerHTML =
+    provRow('Network', escapeHtml(m.channel), true) +
+    provRow('Broadcast date', escapeHtml(m.date || '—'), true) +
+    provRow('Archive item', escapeHtml(id)) +
+    provRow('Source', 'archive.org TV News Archive');
+  $('prov-copied').classList.add('hidden');
   hideError();
   resetPlayerUI();
 
@@ -913,19 +1116,32 @@ async function openPlayer(id, title) {
     if (!res.ok) throw new Error(`metadata HTTP ${res.status}`);
     const data = await res.json();
     const files = data.files || [];
-    // exact {id}.mp4 first (the streamable derivative), then any non-thumb mp4
     const videoFile = files.find(f => f.name === `${id}.mp4`)
       || files.find(f => f.name.endsWith('.mp4') && !f.name.toLowerCase().includes('thumb'));
     if (!videoFile) { showError('No playable video file found for this broadcast.'); return; }
     state.file = videoFile.name;
     state.duration = parseFloat(videoFile.length) || 0;
     if (!state.duration) { showError('This broadcast has no duration metadata, so it cannot be segmented.'); return; }
+    const durRow = provRow('Duration', formatTime(state.duration), true);
+    $('prov-rows').insertAdjacentHTML('beforeend', durRow);
     buildChapters();
     playSegment(0, 0);
   } catch (e) {
     console.error(e);
     showError('Could not load this broadcast. Check your connection and try again.');
   }
+}
+
+function copyArchiveUrl() {
+  const url = `https://archive.org/details/${state.activeId}`;
+  const done = () => {
+    const el = $('prov-copied');
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 2000);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(done);
+  } else { done(); }
 }
 
 function resetEngine() {
@@ -952,17 +1168,25 @@ function buildChapters() {
   $('chapters-head').style.display = '';
   list.style.display = '';
   let count = 0;
-  // FIX: only emit buttons while start < duration (no dead button at exact multiples)
   for (let start = 0; start < state.duration; start += CONFIG.SEGMENT_LENGTH) {
     const end = Math.min(start + CONFIG.SEGMENT_LENGTH, state.duration);
     const btn = document.createElement('button');
     btn.id = `seg-btn-${start}`;
-    btn.className = 'chapter-btn px-3.5 py-2 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-black text-slate-400 mono hover:border-blue-500 hover:text-white transition-all';
+    btn.className = 'chapter-btn';
     btn.textContent = formatTime(start);
     btn.title = `${formatTime(start)} – ${formatTime(end)}`;
     btn.onclick = () => playSegment(start, 0);
     list.appendChild(btn);
     count++;
+  }
+  // tick marks on the progress rail at each 5-minute boundary
+  const ticks = $('progress-ticks');
+  ticks.innerHTML = '';
+  for (let start = CONFIG.SEGMENT_LENGTH; start < state.duration; start += CONFIG.SEGMENT_LENGTH) {
+    const t = document.createElement('div');
+    t.className = 'chapter-tick';
+    t.style.left = `${(start / state.duration) * 100}%`;
+    ticks.appendChild(t);
   }
   $('seg-count').textContent = `${count} chapters · ${formatTime(state.duration)}`;
   updateChapters();
@@ -994,7 +1218,7 @@ function playSegment(start, offset = 0) {
     v.src = url;
     v.load();
     v.oncanplay = () => {
-      if (token !== state.loadToken) return; // superseded by a newer playSegment call
+      if (token !== state.loadToken) return;
       v.oncanplay = null;
       try { v.currentTime = offset; } catch (e) {}
       v.play().catch(showResumeHint);
@@ -1032,7 +1256,6 @@ function clearStager() {
 function handoff() {
   const next = state.currentStart + CONFIG.SEGMENT_LENGTH;
   if (next >= state.duration) { updatePlayUI(false); return; }
-  // near-gapless path: the stager already has the next slice buffered
   if (state.stagerReady && state.stagerEl.dataset.segStart === String(next)) {
     const oldActive = state.activeEl;
     state.activeEl = state.stagerEl;
@@ -1050,19 +1273,17 @@ function handoff() {
     updateChapters();
     updatePlayUI(true);
   } else {
-    playSegment(next, 0); // fallback: load directly (old behavior)
+    playSegment(next, 0);
   }
 }
 
-let lastUiSecond = -1; // low-spec: only repaint progress UI when the displayed second changes
+let lastUiSecond = -1;
 function onTimeUpdate(e) {
   if (e.target !== state.activeEl || !state.isPlayerOpen) return;
   const v = state.activeEl;
   if (v.duration > 0) {
     const timeLeft = v.duration - v.currentTime;
     if (!v.paused && timeLeft < CONFIG.STAGE_AHEAD_SECONDS) stageNext();
-    // NOTE: the swap happens on 'ended' (onEnded -> handoff), never here.
-    // Handing off at timeLeft < 0.4 would clip the final ~0.4s of every slice.
   }
   const g = currentGlobalTime();
   const sec = Math.floor(g);
@@ -1082,7 +1303,6 @@ function onEnded(e) {
 
 function onVideoError(e) {
   if (e.target !== state.activeEl || !state.isPlayerOpen) return;
-  // only surface an error if the very first segment fails
   if (state.currentStart === 0 && !state.activeEl.getAttribute('src')) return;
   if (state.currentStart === 0 && (state.activeEl.readyState === 0)) {
     showError('The video stream failed to load. You can retry or pick another broadcast.');
@@ -1111,7 +1331,6 @@ function updatePlayUI(isPlaying) {
 }
 
 function showResumeHint() {
-  // autoplay was blocked: surface the big play button so one tap resumes
   updatePlayUI(false);
 }
 
@@ -1178,7 +1397,6 @@ function hideError() {
   e.classList.add('hidden');
   e.classList.remove('flex');
 }
-// reset time/progress UI so a new or failed session never shows a stale timestamp
 function resetPlayerUI() {
   state.duration = 0;
   lastUiSecond = -1;
