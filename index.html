@@ -197,9 +197,56 @@ a{color:inherit;text-decoration:none}
         </div>
       </div>
       <button onclick="resetAndSearch()" class="text-[11px] font-black uppercase tracking-wider bg-blue-600 border border-blue-600 rounded-full px-5 py-2 hover:bg-blue-500 transition-colors">Search</button>
+      <button onclick="toggleDonateModal()" title="Support development of this free, open-source player" class="text-[11px] font-black uppercase tracking-wider bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-full px-4 py-2 hover:bg-amber-500/25 transition-colors">♥ Donate</button>
     </div>
   </div>
 </header>
+
+<!-- ============ DONATE MODAL ============ -->
+<div id="donate-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(0,0,0,.7)">
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 relative">
+    <button onclick="toggleDonateModal()" class="absolute top-3 right-4 text-slate-500 hover:text-white text-xl leading-none" title="Close">×</button>
+    <h2 class="text-lg font-black mb-1">Support the player</h2>
+    <p class="text-sm text-slate-400 mb-4">TV News Archive Player is free and open-source. Donations fund development of the player software itself — the archive streams stay free for everyone.</p>
+    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-3">
+      <div class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Bitcoin (BTC)</div>
+      <div class="flex items-center gap-2">
+        <code id="btc-address" class="mono text-xs text-amber-300 break-all flex-1 select-all">bc1qhdczc6na0s8thuql98g00g74shqsg8nuqrml75</code>
+        <button onclick="copyBtcAddress()" class="shrink-0 text-[11px] font-bold bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-700 transition-colors">Copy</button>
+      </div>
+      <div id="btc-copied" class="hidden text-[11px] text-emerald-400 mt-2">Address copied ✓</div>
+    </div>
+    <p class="text-xs text-slate-500">Card/donor-wall options coming soon. Every contribution keeps the player free.</p>
+  </div>
+</div>
+<script>
+function toggleDonateModal() {
+  document.getElementById('donate-modal').classList.toggle('hidden');
+}
+function copyBtcAddress() {
+  var addr = document.getElementById('btc-address').textContent.trim();
+  function done() {
+    var el = document.getElementById('btc-copied');
+    el.classList.remove('hidden');
+    setTimeout(function(){ el.classList.add('hidden'); }, 2000);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(addr).then(done).catch(function(){ fallback(); });
+  } else { fallback(); }
+  function fallback() {
+    var ta = document.createElement('textarea');
+    ta.value = addr; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta); done();
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') document.getElementById('donate-modal').classList.add('hidden');
+});
+document.getElementById('donate-modal').addEventListener('click', function(e) {
+  if (e.target === this) toggleDonateModal();
+});
+</script>
 
 <!-- ============ RESULTS VIEW ============ -->
 <main id="search-view" class="flex-1 min-h-0 overflow-y-auto">
