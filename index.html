@@ -988,6 +988,12 @@ function goBack() {
   else closePlayer(false);
 }
 
+function copyApiUrl() {
+  const url = $('current-api-url')?.textContent?.trim();
+  if (!url || url === '\u2014') return;
+  navigator.clipboard?.writeText(url).catch(() => {});
+}
+
 function closePlayer(triggerHistory = true) {
   resetEngine();
   state.isPlayerOpen = false;
@@ -997,7 +1003,6 @@ function closePlayer(triggerHistory = true) {
   document.body.style.overflow = '';
   if (document.fullscreenElement) document.exitFullscreen?.();
   if (triggerHistory && history.state?.playerOpen) history.back();
-  renderContinueWatching();
 }
 </script>
 </body>
