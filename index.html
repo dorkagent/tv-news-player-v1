@@ -19,6 +19,14 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; ba
 .card:hover .thumb-img { transform: scale(1.06); }
 /* low-spec: skip rendering off-screen cards entirely; reserve ~340px so the scrollbar doesn't jump */
 .card { content-visibility: auto; contain-intrinsic-size: auto 340px; }
+/* station rows view: one horizontal carousel row per station */
+.station-row-strip { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: .5rem;
+  scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+.station-row-strip::-webkit-scrollbar { height: 6px; }
+.station-row-strip::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+.station-row-strip .card { width: 16rem; flex-shrink: 0; }
+.row-nav { padding: .25rem; border-radius: .5rem; }
+.row-nav:hover { background: #1e293b; }
 .noise-item { opacity: .35; }
 .hide-noise .noise-item { display: none !important; }
 .thumb-gradient { background: linear-gradient(0deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.45) 55%, rgba(0,0,0,0) 90%); }
@@ -197,6 +205,10 @@ a{color:inherit;text-decoration:none}
         </div>
       </div>
       <button onclick="resetAndSearch()" class="text-[11px] font-black uppercase tracking-wider bg-blue-600 border border-blue-600 rounded-full px-5 py-2 hover:bg-blue-500 transition-colors">Search</button>
+      <div class="flex items-center bg-slate-800 border border-slate-700 rounded-full p-0.5" role="tablist" aria-label="Browse view">
+        <button id="view-grid-btn" onclick="setView('grid')" role="tab" class="px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-colors bg-blue-600 text-white">Grid</button>
+        <button id="view-rows-btn" onclick="setView('rows')" role="tab" class="px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-colors text-slate-400 hover:text-white">Stations</button>
+      </div>
       <button onclick="toggleDonateModal()" title="Support development of this free, open-source player" class="text-[11px] font-black uppercase tracking-wider bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-full px-4 py-2 hover:bg-amber-500/25 transition-colors">♥ Donate</button>
     </div>
   </div>
@@ -259,6 +271,7 @@ document.getElementById('donate-modal').addEventListener('click', function(e) {
       </button>
     </div>
     <div id="results-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5"></div>
+    <div id="station-rows" class="hidden flex-col gap-9"></div>
     <div id="empty-state" class="hidden py-24 text-center text-slate-500 text-xs font-black uppercase tracking-widest">No broadcasts found</div>
     <div id="pagination" class="mt-10 mb-4 hidden text-center">
       <button onclick="loadMore()" class="text-[11px] font-black uppercase tracking-wider bg-slate-800 border border-slate-700 rounded-full px-10 py-3 hover:bg-slate-700 transition-colors">Load more</button>
@@ -402,6 +415,7 @@ const thumbLoadFailed = (img) => {
 
 const state = {
   page: 1,
+  view: 'grid',            // 'grid' | 'rows' (one horizontal carousel per station)
   allItems: [],
   filterNoise: true,
   // player
@@ -479,8 +493,8 @@ function renderStations() {
   });
 }
 
-const resetAndSearch = () => { state.page = 1; state.allItems = []; search(); };
-const loadMore = () => { state.page++; search(true); };
+const resetAndSearch = () => { state.page = 1; state.allItems = []; if (state.view === 'rows') searchRows(); else search(); };
+const loadMore = () => { if (state.view !== 'grid') return; state.page++; search(true); };
 
 function renderSkeletons(n, append = false) {
   const grid = $('results-grid');
@@ -684,6 +698,137 @@ function buildCard(doc, m) {
     return card;
 }
 
+/* ================= STATION ROWS VIEW ================= */
+// One horizontal carousel row per checked station. A single search request
+// (rows = per-station cap x station count) is grouped client-side by station,
+// so the view costs exactly one archive.org query — same as one grid page.
+const ROWS_PER_STATION = 12;
+
+function setView(v) {
+  if (state.view === v) return;
+  state.view = v;
+  const base = 'px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-colors ';
+  $('view-grid-btn').className = base + (v === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white');
+  $('view-rows-btn').className = base + (v === 'rows' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white');
+  $('results-grid').classList.toggle('hidden', v !== 'grid');
+  $('pagination').classList.toggle('hidden', v !== 'grid');
+  const rowsEl = $('station-rows');
+  rowsEl.classList.toggle('hidden', v !== 'rows');
+  rowsEl.classList.toggle('flex', v === 'rows');
+  if (v === 'rows') { state.page = 1; searchRows(); }
+  else { state.page = 1; state.allItems = []; search(); }
+}
+
+function renderRowSkeletons() {
+  const wrap = $('station-rows');
+  wrap.innerHTML = '';
+  const cardSkel = '<div class="w-64 shrink-0"><div class="aspect-video rounded-xl skeleton"></div><div class="mt-2 h-3 rounded skeleton w-3/4"></div></div>';
+  for (let r = 0; r < 3; r++) {
+    const sec = document.createElement('section');
+    sec.innerHTML = `<div class="h-4 w-40 rounded skeleton mb-3"></div>
+      <div class="flex gap-4 overflow-hidden">${cardSkel.repeat(5)}</div>`;
+    wrap.appendChild(sec);
+  }
+}
+
+async function searchRows() {
+  const wrap = $('station-rows');
+  const empty = $('empty-state');
+  empty.classList.add('hidden');
+  renderRowSkeletons();
+
+  const term = sanitizeTerm($('searchInput').value.trim());
+  const channels = Array.from(document.querySelectorAll('.station-cb:checked')).map(c => `collection:${c.value}`);
+
+  if (channels.length === 0) {
+    wrap.innerHTML = '';
+    empty.classList.remove('hidden');
+    empty.textContent = 'No stations selected';
+    return;
+  }
+
+  const q = buildQuery(term, channels);
+  const params = new URLSearchParams({
+    q,
+    'fl[]': ['identifier', 'title', 'date', 'publicdate'],
+    sort: 'publicdate desc',
+    rows: ROWS_PER_STATION * Object.keys(CONFIG.STATIONS).length,
+    page: 1,
+    output: 'json'
+  });
+  const fullUrl = `${CONFIG.API_SEARCH}?${params}`;
+  $('current-api-url').textContent = fullUrl;
+
+  try {
+    const res = await fetch(fullUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const docs = data?.response?.docs || [];
+    renderStationRows(docs);
+    if (!wrap.children.length) { empty.classList.remove('hidden'); empty.textContent = 'No broadcasts found'; }
+  } catch (e) {
+    console.error('Station rows failed', e);
+    wrap.innerHTML = '';
+    empty.classList.remove('hidden');
+    empty.textContent = 'Search failed — check connection and retry';
+  }
+}
+
+function renderStationRows(docs) {
+  const wrap = $('station-rows');
+  wrap.innerHTML = '';
+  const checked = new Set(Array.from(document.querySelectorAll('.station-cb:checked')).map(c => c.value.replace('TV-', '')));
+  const groups = {};
+  Object.keys(CONFIG.STATIONS).forEach(k => { if (checked.has(k)) groups[k] = []; });
+
+  const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
+  state.allItems = items; // keeps the show-filter dropdown populated
+  items.forEach(it => {
+    const k = it.meta.stationKey;
+    if (groups[k] && groups[k].length < ROWS_PER_STATION) groups[k].push(it);
+  });
+  updateShowDropdown();
+
+  Object.keys(CONFIG.STATIONS).forEach(k => {
+    const list = groups[k];
+    if (!list || !list.length) return;
+    const [bg] = CONFIG.STATION_STYLE[k] || ['#2563eb', '#ffffff'];
+    const section = document.createElement('section');
+    section.className = 'station-row';
+    section.setAttribute('data-station', k);
+    const head = document.createElement('div');
+    head.className = 'flex items-center gap-3 mb-3';
+    const chip = document.createElement('span');
+    chip.className = 'w-3 h-3 rounded-sm shrink-0';
+    chip.style.backgroundColor = bg;
+    const h3 = document.createElement('h3');
+    h3.className = 'text-sm font-black uppercase tracking-wider text-white';
+    h3.textContent = CONFIG.STATIONS[k];
+    const count = document.createElement('span');
+    count.className = 'text-[10px] font-bold text-slate-500 mono';
+    count.textContent = `${list.length} recent`;
+    const spacer = document.createElement('div');
+    spacer.className = 'flex-1';
+    const prev = document.createElement('button');
+    prev.className = 'row-nav text-slate-500 hover:text-white transition-colors';
+    prev.setAttribute('aria-label', `Scroll ${CONFIG.STATIONS[k]} row left`);
+    prev.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>';
+    const next = document.createElement('button');
+    next.className = 'row-nav text-slate-500 hover:text-white transition-colors';
+    next.setAttribute('aria-label', `Scroll ${CONFIG.STATIONS[k]} row right`);
+    next.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
+    head.append(chip, h3, count, spacer, prev, next);
+    const strip = document.createElement('div');
+    strip.className = 'station-row-strip';
+    list.forEach(it => strip.appendChild(buildCard(it.doc, it.meta)));
+    prev.onclick = () => strip.scrollBy({ left: -672, behavior: 'smooth' });
+    next.onclick = () => strip.scrollBy({ left: 672, behavior: 'smooth' });
+    section.append(head, strip);
+    wrap.appendChild(section);
+  });
+  applyShowFilter();
+}
+
 /* ================= FILTERS ================= */
 function updateShowDropdown() {
   const dropdown = $('showFilterDropdown');
@@ -706,6 +851,18 @@ function applyShowFilter() {
   document.querySelectorAll('#results-grid > div').forEach(card => {
     const matches = selected === 'ALL' || card.getAttribute('data-show-name') === selected;
     card.style.display = matches ? '' : 'none';
+  });
+  // station rows: filter cards within each row, hide rows left with nothing visible
+  document.querySelectorAll('#station-rows .station-row').forEach(row => {
+    let visible = 0;
+    row.querySelectorAll('.card').forEach(card => {
+      const matches = selected === 'ALL' || card.getAttribute('data-show-name') === selected;
+      const noiseHidden = state.filterNoise && card.classList.contains('noise-item');
+      const show = matches && !noiseHidden;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    row.style.display = visible ? '' : 'none';
   });
 }
 
