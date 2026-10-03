@@ -583,11 +583,12 @@ const CONFIG = {
     ["1990s", "1990-01-01", "1999-12-31"],
     ["1980s", "1980-01-01", "1989-12-31"]
   ],
-  // Station logos hotlinked from IPTVtuner/TV-Logos (no local hosting).
-  // Only 5 of our 9 stations exist there; the rest fall back to color dots.
+  // Station logos hotlinked (no local hosting). CNN/Fox News use clean official
+  // SVGs from Wikimedia Commons — the IPTVtuner PNGs for those two are cropped
+  // at the source. The rest fall back to color dots (repo lacks those stations).
   LOGOS: {
-    "CNNW": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/CNN.us.png",
-    "FOXNEWSW": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/FoxNews.us.png",
+    "CNNW": "https://upload.wikimedia.org/wikipedia/commons/b/b1/CNN.svg",
+    "FOXNEWSW": "https://upload.wikimedia.org/wikipedia/commons/6/67/Fox_News_Channel_logo.svg",
     "BLOOMBERG": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/BloombergTV.us.png",
     "CSPAN": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/CSPAN.us.png",
     "CSPAN2": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/CSPAN2.us.png"
@@ -706,7 +707,7 @@ function renderStations() {
       img.alt = '';
       img.loading = 'lazy';
       img.draggable = false;
-      img.style.cssText = 'width:24px;height:24px;object-fit:contain;flex-shrink:0;';
+      img.style.cssText = 'height:24px;width:auto;flex-shrink:0;';
       img.onerror = () => img.remove(); // degrade gracefully to name-only
       left.appendChild(img);
     } else {
@@ -976,7 +977,7 @@ function railSection(title, accentWord, meta, items, stationKey) {
       img.alt = '';
       img.loading = 'lazy';
       img.draggable = false;
-      img.style.cssText = 'width:2.4rem;height:2.4rem;object-fit:contain;flex-shrink:0;';
+      img.style.cssText = 'height:2.4rem;width:auto;flex-shrink:0;';
       img.onerror = () => img.remove();
       head.appendChild(img);
     } else {
