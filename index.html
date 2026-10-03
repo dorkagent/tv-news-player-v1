@@ -582,7 +582,16 @@ const CONFIG = {
     ["2000s", "2000-01-01", "2009-12-31"],
     ["1990s", "1990-01-01", "1999-12-31"],
     ["1980s", "1980-01-01", "1989-12-31"]
-  ]
+  ],
+  // Station logos hotlinked from IPTVtuner/TV-Logos (no local hosting).
+  // Only 5 of our 9 stations exist there; the rest fall back to color dots.
+  LOGOS: {
+    "CNNW": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/CNN.us.png",
+    "FOXNEWSW": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/FoxNews.us.png",
+    "BLOOMBERG": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/BloombergTV.us.png",
+    "CSPAN": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/CSPAN.us.png",
+    "CSPAN2": "https://raw.githubusercontent.com/IPTVtuner/TV-Logos/HEAD/CSPAN2.us.png"
+  }
 };
 const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="100%" height="100%" fill="#10141c"/><text x="50%" y="52%" fill="#2a3342" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle">NEWSDORK</text></svg>');
@@ -688,16 +697,36 @@ function renderStations() {
     label.style.transition = 'background .12s';
     label.onmouseover = () => label.style.background = 'var(--surface)';
     label.onmouseout = () => label.style.background = '';
+    const left = document.createElement('span');
+    left.className = 'flex items-center gap-2';
+    const logoUrl = CONFIG.LOGOS[id];
+    if (logoUrl) {
+      const img = document.createElement('img');
+      img.src = logoUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.draggable = false;
+      img.style.cssText = 'width:24px;height:24px;object-fit:contain;flex-shrink:0;';
+      img.onerror = () => img.remove(); // degrade gracefully to name-only
+      left.appendChild(img);
+    } else {
+      // stations with no logo in the repo keep their brand color dot
+      const dot = document.createElement('span');
+      const [bg] = CONFIG.STATION_STYLE[id] || ['#2563eb', '#ffffff'];
+      dot.style.cssText = `width:10px;height:10px;border-radius:3px;background:${bg};flex-shrink:0;margin:0 7px;`;
+      left.appendChild(dot);
+    }
     const span = document.createElement('span');
     span.className = 'text-xs font-bold uppercase';
     span.style.color = 'var(--muted)';
     span.textContent = name;
+    left.appendChild(span);
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = `TV-${id}`; cb.checked = true;
     cb.className = 'station-cb w-4 h-4 shrink-0';
     cb.style.accentColor = 'var(--lime)';
     cb.onchange = resetAndSearch;
-    label.appendChild(span); label.appendChild(cb);
+    label.appendChild(left); label.appendChild(cb);
     container.appendChild(label);
   });
 }
