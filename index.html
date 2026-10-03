@@ -392,6 +392,10 @@ a{color:inherit;text-decoration:none}
 
     <!-- rails browse view (default) -->
     <div id="browse-rails"></div>
+    <div id="older-wrap" class="hidden text-center" style="margin-top:.5rem;margin-bottom:2.5rem">
+      <button id="older-btn" onclick="loadOlder()" class="btn-ghost" style="padding:.8rem 2.6rem">Dig deeper into the archive</button>
+      <div id="older-note" class="mono mt-3" style="font-size:.68rem;color:var(--faint);letter-spacing:.06em"></div>
+    </div>
 
     <!-- search results grid -->
     <div id="results-wrap" class="hidden">
@@ -605,6 +609,7 @@ const state = {
   searching: false,       // true when a text query is active (grid mode); false = rails browse
   allItems: [],
   filterNoise: true,
+  railPage: 1,            // browse pagination: 1 = latest; loadOlder() walks further back
   browseToken: 0,         // guards against stale decade rails after navigation
   isPlayerOpen: false,
   activeId: null,
@@ -707,12 +712,14 @@ const loadMore = () => { if (!state.searching) return; state.page++; search(true
 
 function showBrowse() {
   $('browse-rails').classList.remove('hidden');
+  $('older-wrap').classList.remove('hidden');
   $('results-wrap').classList.add('hidden');
   $('pagination').classList.add('hidden');
   $('empty-state').classList.add('hidden');
 }
 function showResults() {
   $('browse-rails').classList.add('hidden');
+  $('older-wrap').classList.add('hidden');
   $('results-wrap').classList.remove('hidden');
 }
 
@@ -822,6 +829,12 @@ async function browseRails() {
     const docs = await iaSearch(buildQuery('', channels), CONFIG.RAIL_CAP * Object.keys(CONFIG.STATIONS).length, 1);
     const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
     state.allItems = items;
+    state.railPage = 1;
+    // reset the "dig deeper" control for this fresh browse
+    $('older-btn').style.display = '';
+    $('older-btn').disabled = false;
+    $('older-btn').textContent = 'Dig deeper into the archive';
+    $('older-note').textContent = '';
     updateShowDropdown();
     renderRails(items);
     fetchDecades(channels, token); // fills in below as each resolves
@@ -845,6 +858,64 @@ async function fetchDecades(channels, token) {
     const { label, items } = await job;
     if (token !== state.browseToken) return; // user navigated away; drop stale rails
     if (items.length) appendRail(`${label} archive`, `${items.length} broadcasts`, items);
+  }
+}
+
+/* ================= TIME TRAVEL ================= */
+// "Dig deeper into the archive": each click fetches the next page of the
+// browse query (one archive.org request) and appends it as "Earlier" rails,
+// so the user can walk backward through time without bound.
+async function loadOlder() {
+  const btn = $('older-btn');
+  const note = $('older-note');
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  note.textContent = '';
+  const channels = checkedCollections();
+  const perPage = CONFIG.RAIL_CAP * Object.keys(CONFIG.STATIONS).length;
+  const token = state.browseToken;
+  state.railPage++;
+  try {
+    const docs = await iaSearch(buildQuery('', channels), perPage, state.railPage);
+    if (token !== state.browseToken) return; // user navigated away; drop it
+    if (!docs.length) {
+      note.textContent = 'You have reached the end of the archive.';
+      btn.style.display = 'none';
+      return;
+    }
+    const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
+    items.forEach(it => state.allItems.push(it));
+    updateShowDropdown();
+
+    const wrap = $('browse-rails');
+    const head = document.createElement('div');
+    head.className = 'rail-head';
+    head.innerHTML = `<h2 class="rail-title">Earlier <span class="accent">broadcasts</span></h2>` +
+      `<span class="rail-meta">further back in time</span>`;
+    wrap.appendChild(head);
+
+    const checked = new Set(
+      Array.from(document.querySelectorAll('.station-cb:checked')).map(c => c.value.replace('TV-', ''))
+    );
+    Object.keys(CONFIG.STATIONS).forEach(k => {
+      if (!checked.has(k)) return;
+      const list = items.filter(it => it.meta.stationKey === k).slice(0, CONFIG.RAIL_CAP);
+      if (!list.length) return;
+      wrap.appendChild(railSection('Earlier', CONFIG.STATIONS[k], `${list.length} older`, list));
+    });
+    applyShowFilter();
+
+    if (docs.length < perPage) {
+      note.textContent = 'You have reached the end of the archive.';
+      btn.style.display = 'none';
+    }
+  } catch (e) {
+    console.error('Load older failed', e);
+    state.railPage--;
+    note.textContent = 'Could not load older broadcasts — try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Dig deeper into the archive';
   }
 }
 
