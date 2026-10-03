@@ -887,23 +887,32 @@ async function loadOlder() {
     items.forEach(it => state.allItems.push(it));
     updateShowDropdown();
 
-    const wrap = $('browse-rails');
+    // one wrapper per batch: the header lives and dies with its rails, so a
+    // batch hidden entirely by the show filter never leaves an orphaned header
+    const batch = document.createElement('div');
+    batch.className = 'earlier-batch';
     const head = document.createElement('div');
     head.className = 'rail-head';
     head.innerHTML = `<h2 class="rail-title">Earlier <span class="accent">broadcasts</span></h2>` +
-      `<span class="rail-meta">further back in time</span>`;
-    wrap.appendChild(head);
+      `<span class="rail-meta">further back in time · page ${state.railPage}</span>`;
+    batch.appendChild(head);
 
     const checked = new Set(
       Array.from(document.querySelectorAll('.station-cb:checked')).map(c => c.value.replace('TV-', ''))
     );
+    let added = 0;
     Object.keys(CONFIG.STATIONS).forEach(k => {
       if (!checked.has(k)) return;
       const list = items.filter(it => it.meta.stationKey === k).slice(0, CONFIG.RAIL_CAP);
       if (!list.length) return;
-      wrap.appendChild(railSection('Earlier', CONFIG.STATIONS[k], `${list.length} older`, list));
+      batch.appendChild(railSection('Earlier', CONFIG.STATIONS[k], `${list.length} older`, list));
+      added++;
     });
+    if (!added) { state.railPage--; return; }
+    $('browse-rails').appendChild(batch);
     applyShowFilter();
+    // reveal the new batch (it lands above the button, out of view)
+    batch.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     if (docs.length < perPage) {
       note.textContent = 'You have reached the end of the archive.';
@@ -1141,6 +1150,15 @@ function applyShowFilter() {
       if (show) visible++;
     });
     rail.style.display = visible ? '' : 'none';
+  });
+  // "earlier" batches: hide the batch (header included) when the filter
+  // leaves none of its rails visible
+  document.querySelectorAll('#browse-rails .earlier-batch').forEach(batch => {
+    let visible = 0;
+    batch.querySelectorAll('.rail').forEach(rail => {
+      if (rail.style.display !== 'none') visible++;
+    });
+    batch.style.display = visible ? '' : 'none';
   });
 }
 
