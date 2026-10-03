@@ -115,7 +115,7 @@ select.pill option { background: var(--surface2); color: var(--text); }
 
 /* ---------- rails ---------- */
 .rail { margin-bottom: 2.6rem; }
-.rail-head { display: flex; align-items: baseline; gap: .9rem; margin-bottom: 1rem; }
+.rail-head { display: flex; align-items: center; gap: .9rem; margin-bottom: 1rem; }
 .rail-title {
   font-family: var(--font-display); font-weight: 600; font-size: 1.55rem;
   letter-spacing: .06em; text-transform: uppercase; line-height: 1;
@@ -939,7 +939,7 @@ async function loadOlder() {
       if (!checked.has(k)) return;
       const list = items.filter(it => it.meta.stationKey === k).slice(0, CONFIG.RAIL_CAP);
       if (!list.length) return;
-      batch.appendChild(railSection('Earlier', CONFIG.STATIONS[k], `${list.length} older`, list));
+      batch.appendChild(railSection('Earlier', CONFIG.STATIONS[k], `${list.length} older`, list, k));
       added++;
     });
     if (!added) { state.railPage--; return; }
@@ -962,11 +962,30 @@ async function loadOlder() {
   }
 }
 
-function railSection(title, accentWord, meta, items) {
+function railSection(title, accentWord, meta, items, stationKey) {
   const section = document.createElement('section');
   section.className = 'rail';
   const head = document.createElement('div');
   head.className = 'rail-head';
+  if (stationKey) {
+    // station logo above the rail; color dot fallback where the logo repo has none
+    const logoUrl = CONFIG.LOGOS[stationKey];
+    if (logoUrl) {
+      const img = document.createElement('img');
+      img.src = logoUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.draggable = false;
+      img.style.cssText = 'width:2.4rem;height:2.4rem;object-fit:contain;flex-shrink:0;';
+      img.onerror = () => img.remove();
+      head.appendChild(img);
+    } else {
+      const dot = document.createElement('span');
+      const [bg] = CONFIG.STATION_STYLE[stationKey] || ['#2563eb', '#ffffff'];
+      dot.style.cssText = `width:.9rem;height:.9rem;border-radius:.3rem;background:${bg};flex-shrink:0;`;
+      head.appendChild(dot);
+    }
+  }
   const h = document.createElement('h2');
   h.className = 'rail-title';
   h.innerHTML = accentWord
@@ -1027,7 +1046,7 @@ function renderRails(items) {
     if (!checked.has(k)) return;
     const list = items.filter(it => it.meta.stationKey === k).slice(0, CONFIG.RAIL_CAP);
     if (!list.length) return;
-    wrap.appendChild(railSection(CONFIG.STATIONS[k], '', `${list.length} recent`, list));
+    wrap.appendChild(railSection(CONFIG.STATIONS[k], '', `${list.length} recent`, list, k));
   });
   applyShowFilter();
 }
