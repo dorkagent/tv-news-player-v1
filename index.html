@@ -299,7 +299,7 @@ a{color:inherit;text-decoration:none}
   <div class="max-w-1600 mx-auto flex flex-wrap items-center gap-3 px-4 py-3">
     <div class="flex items-center gap-3 cursor-pointer select-none" onclick="goHome()" title="NewsDork home">
       <div style="width:2.4rem;height:2.4rem;border-radius:.8rem;background:var(--lime);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(200,245,66,.3)">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#131a05" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill-rule="evenodd" fill="#131a05" d="M16.2 3h3.1a1.1 1.1 0 0 1 1.1 1.1v15.8a1.1 1.1 0 0 1-1.1 1.1h-3.1V3zM10 7.2a6.8 6.8 0 1 0 .002 13.6A6.8 6.8 0 0 0 10 7.2zm0 3.5a3.3 3.3 0 1 1-.002 6.6A3.3 3.3 0 0 1 10 10.7z"/><path fill="#c8f542" d="M8.7 11.5v5c0 .5.54.8.97.55l3.93-2.5a.62.62 0 0 0 0-1.06l-3.93-2.5a.62.62 0 0 0-.97.51z"/></svg>
       </div>
       <div>
         <div class="wordmark">News<span class="wm-dork">Dork</span></div>
@@ -333,6 +333,7 @@ a{color:inherit;text-decoration:none}
       </div>
       <button onclick="resetAndSearch()" class="btn-lime">Search</button>
       <button onclick="toggleDonateModal()" title="Support development of this free, open-source player" class="btn-ghost">&#10084; Donate</button>
+      <button onclick="toggleAboutModal()" title="About NewsDork — where the videos come from" aria-label="About this site" class="btn-ghost" style="width:2.4rem;height:2.4rem;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;padding:0">?</button>
     </div>
   </div>
 </header>
@@ -369,6 +370,18 @@ a{color:inherit;text-decoration:none}
       </div>
     </div>
     <p class="text-xs" style="color:var(--faint)">Every contribution keeps the player free.</p>
+  </div>
+</div>
+
+<!-- ============ ABOUT MODAL ============ -->
+<div id="about-modal" class="hidden fixed inset-0 z-100 flex items-center justify-center p-4" style="background:rgba(3,5,8,.75);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)">
+  <div class="rounded-2xl max-w-md w-full p-6 relative" style="background:var(--surface);border:1px solid var(--border)">
+    <button onclick="toggleAboutModal()" class="absolute top-3 right-4 text-xl leading-none" style="color:var(--faint)" title="Close">&times;</button>
+    <div class="eyebrow mb-2" style="color:var(--lime)">About</div>
+    <h2 class="display text-2xl font-bold uppercase" style="letter-spacing:.04em">Where the videos live</h2>
+    <p class="text-sm mt-2 mb-3" style="color:var(--muted)">NewsDork doesn't host a single video. Every broadcast here is publicly available on the <a href="https://archive.org/details/tv" target="_blank" rel="noopener" class="underline" style="color:var(--lime)">Internet Archive's TV News Archive</a> — this site is just a free guide and player for browsing it.</p>
+    <p class="text-sm mb-3" style="color:var(--muted)">Nothing is stored, copied, or re-hosted here. Pressing play streams directly from the Archive's public collections, and every card links back to its original archive.org page.</p>
+    <p class="text-xs" style="color:var(--faint)">NewsDork is free and open-source software. Donations fund development of the player — never access to the streams.</p>
   </div>
 </div>
 
@@ -509,6 +522,9 @@ a{color:inherit;text-decoration:none}
 function toggleDonateModal() {
   document.getElementById('donate-modal').classList.toggle('hidden');
 }
+function toggleAboutModal() {
+  document.getElementById('about-modal').classList.toggle('hidden');
+}
 function copyBtcAddress() {
   var addr = document.getElementById('btc-address').textContent.trim();
   function done() {
@@ -527,10 +543,13 @@ function copyBtcAddress() {
   }
 }
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') document.getElementById('donate-modal').classList.add('hidden');
+  if (e.key === 'Escape') { document.getElementById('donate-modal').classList.add('hidden'); document.getElementById('about-modal').classList.add('hidden'); }
 });
 document.getElementById('donate-modal').addEventListener('click', function(e) {
   if (e.target === this) toggleDonateModal();
+});
+document.getElementById('about-modal').addEventListener('click', function(e) {
+  if (e.target === this) toggleAboutModal();
 });
 </script>
 
@@ -906,7 +925,7 @@ function renderRails(items) {
     if (!checked.has(k)) return;
     const list = items.filter(it => it.meta.stationKey === k).slice(0, CONFIG.RAIL_CAP);
     if (!list.length) return;
-    wrap.appendChild(railSection(`The ${CONFIG.STATIONS[k]}`, 'collection', `${list.length} recent`, list));
+    wrap.appendChild(railSection(CONFIG.STATIONS[k], '', `${list.length} recent`, list));
   });
   applyShowFilter();
 }
