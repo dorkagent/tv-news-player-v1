@@ -854,6 +854,7 @@ async function browseRails() {
   const channels = checkedCollections();
   if (channels.length === 0) {
     $('browse-rails').innerHTML = '';
+    $('older-wrap').classList.add('hidden');
     const empty = $('empty-state');
     empty.classList.remove('hidden');
     empty.querySelector('.display').textContent = 'No stations selected';
@@ -862,6 +863,7 @@ async function browseRails() {
   const token = ++state.browseToken;
   try {
     const docs = await iaSearch(buildQuery('', channels), CONFIG.RAIL_CAP * Object.keys(CONFIG.STATIONS).length, 1);
+    if (token !== state.browseToken) return;
     const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
     state.allItems = items;
     state.railPage = 1;
@@ -906,14 +908,17 @@ async function loadOlder() {
   btn.disabled = true;
   btn.textContent = 'Loading…';
   note.textContent = '';
+  let endReached = false;
   const channels = checkedCollections();
   const perPage = CONFIG.RAIL_CAP * Object.keys(CONFIG.STATIONS).length;
   const token = state.browseToken;
-  state.railPage++;
+  const nextPage = state.railPage + 1;
   try {
-    const docs = await iaSearch(buildQuery('', channels), perPage, state.railPage);
+    const docs = await iaSearch(buildQuery('', channels), perPage, nextPage);
     if (token !== state.browseToken) return; // user navigated away; drop it
+    state.railPage = nextPage;
     if (!docs.length) {
+      endReached = true;
       note.textContent = 'You have reached the end of the archive.';
       btn.style.display = 'none';
       return;
@@ -943,23 +948,25 @@ async function loadOlder() {
       batch.appendChild(railSection('Earlier', CONFIG.STATIONS[k], `${list.length} older`, list, k));
       added++;
     });
-    if (!added) { state.railPage--; return; }
+    if (!added) return;
     $('browse-rails').appendChild(batch);
     applyShowFilter();
     // reveal the new batch (it lands above the button, out of view)
     batch.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     if (docs.length < perPage) {
+      endReached = true;
       note.textContent = 'You have reached the end of the archive.';
       btn.style.display = 'none';
     }
   } catch (e) {
     console.error('Load older failed', e);
-    state.railPage--;
     note.textContent = 'Could not load older broadcasts — try again.';
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Dig deeper into the archive';
+    if (!endReached) {
+      btn.disabled = false;
+      btn.textContent = 'Dig deeper into the archive';
+    }
   }
 }
 
@@ -1029,7 +1036,8 @@ function railSection(title, accentWord, meta, items, stationKey) {
 }
 
 function appendRail(title, meta, items) {
-  $('browse-rails').appendChild(railSection(title, '', meta, items));
+  const container = $('decade-rails') || $('browse-rails');
+  container.appendChild(railSection(title, '', meta, items));
   applyShowFilter();
 }
 
@@ -1049,6 +1057,9 @@ function renderRails(items) {
     if (!list.length) return;
     wrap.appendChild(railSection(CONFIG.STATIONS[k], '', `${list.length} recent`, list, k));
   });
+  const decadeContainer = document.createElement('div');
+  decadeContainer.id = 'decade-rails';
+  wrap.appendChild(decadeContainer);
   applyShowFilter();
 }
 
