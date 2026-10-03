@@ -218,13 +218,6 @@ select.pill option { background: var(--surface2); color: var(--text); }
 .chapter-strip { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .chapter-strip::-webkit-scrollbar { height: 6px; }
 .chapter-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-.chapter-btn { flex: 0 0 auto; font-family: var(--font-mono); font-size: .68rem; font-weight: 700;
-  padding: .55rem .9rem; border-radius: 10px; background: var(--surface);
-  border: 1px solid var(--border); color: var(--muted); letter-spacing: .05em;
-  transition: border-color .15s, color .15s, background .15s; }
-.chapter-btn:hover { border-color: var(--lime-line); color: var(--text); }
-.chapter-btn.chapter-active { border-color: var(--lime); color: var(--lime-ink);
-  background: var(--lime); }
 input[type="range"].vol { accent-color: var(--lime); width: 90px; }
 .prov-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
   padding: .65rem 0; border-bottom: 1px solid var(--border-soft); }
@@ -494,11 +487,6 @@ a{color:inherit;text-decoration:none}
           </div>
         </div>
 
-        <div id="chapters-head" class="mt-4 mb-2 flex items-center justify-between">
-          <span class="eyebrow">Chapters &mdash; 5 min segments</span>
-          <span id="seg-count" class="mono" style="font-size:.66rem;color:var(--faint)"></span>
-        </div>
-        <div id="seg-list" class="chapter-strip flex gap-2 overflow-x-auto pb-3"></div>
       </div>
 
       <aside class="min-w-0">
@@ -510,7 +498,7 @@ a{color:inherit;text-decoration:none}
         </div>
         <div class="rounded-2xl p-5 mt-4" style="background:var(--surface);border:1px solid var(--border-soft)">
           <div class="eyebrow mb-2" style="color:var(--lime)">About this player</div>
-          <p class="text-xs" style="color:var(--muted);line-height:1.6">Streams the broadcast in 5-minute slices with near-gapless handoff. Chapters below jump between slices instantly.</p>
+          <p class="text-xs" style="color:var(--muted);line-height:1.6">Streams the broadcast in 5-minute slices with near-gapless handoff. Tick marks on the progress bar show slice boundaries — click anywhere to seek.</p>
         </div>
       </aside>
     </div>
@@ -1198,23 +1186,8 @@ function resetEngine() {
 }
 
 function buildChapters() {
-  const list = $('seg-list');
-  list.innerHTML = '';
-  $('chapters-head').style.display = '';
-  list.style.display = '';
-  let count = 0;
-  for (let start = 0; start < state.duration; start += CONFIG.SEGMENT_LENGTH) {
-    const end = Math.min(start + CONFIG.SEGMENT_LENGTH, state.duration);
-    const btn = document.createElement('button');
-    btn.id = `seg-btn-${start}`;
-    btn.className = 'chapter-btn';
-    btn.textContent = formatTime(start);
-    btn.title = `${formatTime(start)} – ${formatTime(end)}`;
-    btn.onclick = () => playSegment(start, 0);
-    list.appendChild(btn);
-    count++;
-  }
-  // tick marks on the progress rail at each 5-minute boundary
+  // 5-minute slice boundaries as tick marks on the progress rail
+  // (the chapter button strip was removed — seeking happens on the rail itself)
   const ticks = $('progress-ticks');
   ticks.innerHTML = '';
   for (let start = CONFIG.SEGMENT_LENGTH; start < state.duration; start += CONFIG.SEGMENT_LENGTH) {
@@ -1222,17 +1195,6 @@ function buildChapters() {
     t.className = 'chapter-tick';
     t.style.left = `${(start / state.duration) * 100}%`;
     ticks.appendChild(t);
-  }
-  $('seg-count').textContent = `${count} chapters · ${formatTime(state.duration)}`;
-  updateChapters();
-}
-
-function updateChapters() {
-  document.querySelectorAll('#seg-list .chapter-btn').forEach(b => b.classList.remove('chapter-active'));
-  const btn = $(`seg-btn-${state.currentStart}`);
-  if (btn) {
-    btn.classList.add('chapter-active');
-    btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
   }
 }
 
@@ -1259,7 +1221,6 @@ function playSegment(start, offset = 0) {
       v.play().catch(showResumeHint);
     };
   }
-  updateChapters();
   updatePlayUI(true);
 }
 
@@ -1305,7 +1266,6 @@ function handoff() {
     v.classList.add('is-active');
     try { v.currentTime = 0; } catch (e) {}
     v.play().catch(showResumeHint);
-    updateChapters();
     updatePlayUI(true);
   } else {
     playSegment(next, 0);
@@ -1422,8 +1382,6 @@ function showError(msg) {
   const e = $('player-error');
   e.classList.remove('hidden');
   e.classList.add('flex');
-  $('chapters-head').style.display = 'none';
-  $('seg-list').style.display = 'none';
   resetPlayerUI();
   updatePlayUI(false);
 }
