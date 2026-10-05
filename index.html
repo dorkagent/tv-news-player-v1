@@ -132,6 +132,12 @@ select.pill option { background: var(--surface2); color: var(--text); }
 }
 .rail-btn:hover { border-color: var(--lime-line); color: var(--lime); background: var(--surface2); }
 .rail-btn:disabled { opacity: .3; pointer-events: none; }
+/* clickable rail headers (station view entry) */
+.rail-link { cursor: pointer; }
+h2.rail-link { transition: color .15s; }
+h2.rail-link:hover { color: var(--lime); }
+img.rail-link { transition: transform .15s; }
+img.rail-link:hover { transform: scale(1.08); }
 .rail-strip {
   display: flex; gap: 1rem; overflow-x: auto; padding: .25rem .1rem 1rem;
   scroll-snap-type: x proximity;
@@ -401,7 +407,18 @@ a{color:inherit;text-decoration:none}
 
     <!-- search results grid -->
     <div id="results-wrap" class="hidden">
-      <div class="rail-head mb-4">
+      <div id="station-banner" class="hidden">
+        <button onclick="closeStationView()" class="pill mb-4">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          All stations
+        </button>
+        <div class="rail-head">
+          <span id="station-logo" class="flex items-center shrink-0"></span>
+          <h2 class="rail-title"><span id="station-name"></span></h2>
+          <span id="station-count" class="rail-meta"></span>
+        </div>
+      </div>
+      <div id="results-head" class="rail-head mb-4">
         <h2 class="rail-title">Search <span class="accent">results</span></h2>
         <span id="results-count" class="rail-meta"></span>
       </div>
@@ -576,13 +593,6 @@ const CONFIG = {
     "CSPAN":    ["#6B7280", "#ffffff"],
     "CSPAN2":   ["#4B5563", "#ffffff"]
   },
-  DECADES: [
-    ["2020s", "2020-01-01", "2029-12-31"],
-    ["2010s", "2010-01-01", "2019-12-31"],
-    ["2000s", "2000-01-01", "2009-12-31"],
-    ["1990s", "1990-01-01", "1999-12-31"],
-    ["1980s", "1980-01-01", "1989-12-31"]
-  ],
   // Station logos hotlinked (no local hosting). CNN/Fox News use clean official
   // SVGs from Wikimedia Commons — the IPTVtuner PNGs for those two are cropped
   // at the source. The rest fall back to color dots (repo lacks those stations).
@@ -621,11 +631,12 @@ const thumbLoadFailed = (img) => {
 
 const state = {
   page: 1,
-  searching: false,       // true when a text query is active (grid mode); false = rails browse
+  searching: false,       // true when a text query is active (grid mode)
+  stationView: null,      // station key when browsing one station's full archive
   allItems: [],
   filterNoise: true,
   railPage: 1,            // browse pagination: 1 = latest; loadOlder() walks further back
-  browseToken: 0,         // guards against stale decade rails after navigation
+  browseToken: 0,         // guards browseRails/loadOlder against stale async responses
   isPlayerOpen: false,
   activeId: null,
   file: null,
@@ -698,36 +709,16 @@ function renderStations() {
     label.style.transition = 'background .12s';
     label.onmouseover = () => label.style.background = 'var(--surface)';
     label.onmouseout = () => label.style.background = '';
-    const left = document.createElement('span');
-    left.className = 'flex items-center gap-2';
-    const logoUrl = CONFIG.LOGOS[id];
-    if (logoUrl) {
-      const img = document.createElement('img');
-      img.src = logoUrl;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.draggable = false;
-      img.style.cssText = 'height:24px;width:auto;flex-shrink:0;';
-      img.onerror = () => img.remove(); // degrade gracefully to name-only
-      left.appendChild(img);
-    } else {
-      // stations with no logo in the repo keep their brand color dot
-      const dot = document.createElement('span');
-      const [bg] = CONFIG.STATION_STYLE[id] || ['#2563eb', '#ffffff'];
-      dot.style.cssText = `width:10px;height:10px;border-radius:3px;background:${bg};flex-shrink:0;margin:0 7px;`;
-      left.appendChild(dot);
-    }
     const span = document.createElement('span');
     span.className = 'text-xs font-bold uppercase';
     span.style.color = 'var(--muted)';
     span.textContent = name;
-    left.appendChild(span);
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = `TV-${id}`; cb.checked = true;
     cb.className = 'station-cb w-4 h-4 shrink-0';
     cb.style.accentColor = 'var(--lime)';
-    cb.onchange = resetAndSearch;
-    label.appendChild(left); label.appendChild(cb);
+    cb.onchange = () => { state.stationView = null; resetAndSearch(); };
+    label.appendChild(span); label.appendChild(cb);
     container.appendChild(label);
   });
 }
@@ -740,10 +731,15 @@ const resetAndSearch = () => {
   state.allItems = [];
   const term = sanitizeTerm($('searchInput').value.trim());
   state.searching = term.length > 0;
-  if (state.searching) search();
+  if (state.searching) state.stationView = null; // a text search is global
+  if (state.searching || state.stationView) search();
   else browseRails();
 };
-const loadMore = () => { if (!state.searching) return; state.page++; search(true); };
+const loadMore = () => {
+  if (!state.searching && !state.stationView) return;
+  state.page++;
+  search(true);
+};
 
 function showBrowse() {
   $('browse-rails').classList.remove('hidden');
@@ -819,8 +815,14 @@ async function search(append = false) {
   if (!append) { pag.classList.add('hidden'); empty.classList.add('hidden'); }
   renderSkeletons(append ? 6 : 12, append);
 
-  const term = sanitizeTerm($('searchInput').value.trim());
-  const channels = checkedCollections();
+  // station view: banner + single-station query; text search: standard header
+  const isStation = !!state.stationView;
+  $('station-banner').classList.toggle('hidden', !isStation);
+  $('results-head').classList.toggle('hidden', isStation);
+  if (isStation) renderStationBanner();
+
+  const term = isStation ? '' : sanitizeTerm($('searchInput').value.trim());
+  const channels = isStation ? [`collection:TV-${state.stationView}`] : checkedCollections();
   if (channels.length === 0) {
     clearSkeletons();
     empty.classList.remove('hidden');
@@ -834,7 +836,9 @@ async function search(append = false) {
       empty.querySelector('.display').textContent = 'No broadcasts found';
     }
     renderItems(docs, append);
-    $('results-count').textContent = `${state.allItems.length} broadcasts`;
+    const countTxt = `${state.allItems.length} broadcasts`;
+    $('results-count').textContent = countTxt;
+    $('station-count').textContent = countTxt;
     if (docs.length >= CONFIG.PAGE_SIZE) pag.classList.remove('hidden');
   } catch (e) {
     console.error('Search failed', e);
@@ -845,6 +849,54 @@ async function search(append = false) {
   } finally {
     clearSkeletons();
   }
+}
+
+/* ================= STATION VIEW ================= */
+// Dedicated full-archive view for one station: grid + infinite "load more"
+// scrolling back through time. Entered by clicking a rail header.
+function openStationView(stationKey) {
+  // sync the Stations menu so it truthfully reflects the view
+  document.querySelectorAll('.station-cb').forEach(cb => {
+    cb.checked = cb.value === `TV-${stationKey}`;
+  });
+  state.stationView = stationKey;
+  state.searching = false;
+  $('searchInput').value = '';
+  state.page = 1;
+  state.allItems = [];
+  search();
+  window.scrollTo({ top: 0 });
+}
+
+function closeStationView() {
+  state.stationView = null;
+  // restore the full browse
+  document.querySelectorAll('.station-cb').forEach(cb => { cb.checked = true; });
+  resetAndSearch();
+  window.scrollTo({ top: 0 });
+}
+
+function renderStationBanner() {
+  const k = state.stationView;
+  const wrap = $('station-logo');
+  wrap.innerHTML = '';
+  const logoUrl = CONFIG.LOGOS[k];
+  if (logoUrl) {
+    const img = document.createElement('img');
+    img.src = logoUrl;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.draggable = false;
+    img.style.cssText = 'height:2.6rem;width:auto;flex-shrink:0;';
+    img.onerror = () => img.remove();
+    wrap.appendChild(img);
+  } else {
+    const dot = document.createElement('span');
+    const [bg] = CONFIG.STATION_STYLE[k] || ['#2563eb', '#ffffff'];
+    dot.style.cssText = `width:1rem;height:1rem;border-radius:.3rem;background:${bg};flex-shrink:0;`;
+    wrap.appendChild(dot);
+  }
+  $('station-name').textContent = CONFIG.STATIONS[k];
 }
 
 /* ================= RAILS BROWSE ================= */
@@ -862,6 +914,7 @@ async function browseRails() {
   const token = ++state.browseToken;
   try {
     const docs = await iaSearch(buildQuery('', channels), CONFIG.RAIL_CAP * Object.keys(CONFIG.STATIONS).length, 1);
+    if (token !== state.browseToken) return; // stale: a newer browse superseded this one
     const items = docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) }));
     state.allItems = items;
     state.railPage = 1;
@@ -872,27 +925,12 @@ async function browseRails() {
     $('older-note').textContent = '';
     updateShowDropdown();
     renderRails(items);
-    fetchDecades(channels, token); // fills in below as each resolves
   } catch (e) {
     console.error('Rails failed', e);
     $('browse-rails').innerHTML = '';
     const empty = $('empty-state');
     empty.classList.remove('hidden');
     empty.querySelector('.display').textContent = 'Search failed — check connection and retry';
-  }
-}
-
-async function fetchDecades(channels, token) {
-  const jobs = CONFIG.DECADES.map(async ([label, from, to]) => {
-    try {
-      const docs = await iaSearch(buildQuery('', channels, [from, to]), 10, 1);
-      return { label, items: docs.map(doc => ({ doc, meta: parseMeta(doc.title || '', doc.identifier) })) };
-    } catch (e) { return { label, items: [] }; }
-  });
-  for (const job of jobs) {
-    const { label, items } = await job;
-    if (token !== state.browseToken) return; // user navigated away; drop stale rails
-    if (items.length) appendRail(`${label} archive`, `${items.length} broadcasts`, items);
   }
 }
 
@@ -968,24 +1006,31 @@ function railSection(title, accentWord, meta, items, stationKey) {
   section.className = 'rail';
   const head = document.createElement('div');
   head.className = 'rail-head';
+  let stationGo = null, stationTitle = '';
   if (stationKey) {
     // station logo above the rail; color dot fallback where the logo repo has none
     const logoUrl = CONFIG.LOGOS[stationKey];
+    let mark;
     if (logoUrl) {
-      const img = document.createElement('img');
-      img.src = logoUrl;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.draggable = false;
-      img.style.cssText = 'height:2.4rem;width:auto;flex-shrink:0;';
-      img.onerror = () => img.remove();
-      head.appendChild(img);
+      mark = document.createElement('img');
+      mark.src = logoUrl;
+      mark.alt = '';
+      mark.loading = 'lazy';
+      mark.draggable = false;
+      mark.style.cssText = 'height:2.4rem;width:auto;flex-shrink:0;';
+      mark.onerror = () => mark.remove();
     } else {
-      const dot = document.createElement('span');
+      mark = document.createElement('span');
       const [bg] = CONFIG.STATION_STYLE[stationKey] || ['#2563eb', '#ffffff'];
-      dot.style.cssText = `width:.9rem;height:.9rem;border-radius:.3rem;background:${bg};flex-shrink:0;`;
-      head.appendChild(dot);
+      mark.style.cssText = `width:.9rem;height:.9rem;border-radius:.3rem;background:${bg};flex-shrink:0;`;
     }
+    head.appendChild(mark);
+    // clicking the station name/logo opens the full station view (infinite scroll)
+    stationGo = () => openStationView(stationKey);
+    stationTitle = `View all ${CONFIG.STATIONS[stationKey]} broadcasts`;
+    mark.classList.add('rail-link');
+    mark.title = stationTitle;
+    mark.onclick = stationGo;
   }
   const h = document.createElement('h2');
   h.className = 'rail-title';
@@ -1007,6 +1052,11 @@ function railSection(title, accentWord, meta, items, stationKey) {
   next.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
   nav.append(prev, next);
   head.append(h, m, nav);
+  if (stationGo) {
+    h.classList.add('rail-link');
+    h.title = stationTitle;
+    h.onclick = stationGo;
+  }
   const strip = document.createElement('div');
   strip.className = 'rail-strip';
   items.forEach(it => {
@@ -1026,11 +1076,6 @@ function railSection(title, accentWord, meta, items, stationKey) {
   requestAnimationFrame(syncNav);
   section.append(head, strip);
   return section;
-}
-
-function appendRail(title, meta, items) {
-  $('browse-rails').appendChild(railSection(title, '', meta, items));
-  applyShowFilter();
 }
 
 function renderRails(items) {
