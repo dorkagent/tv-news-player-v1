@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NewsDork</title>
+<meta name="description" content="An open-source player for the Internet Archive TV News Archive. Free, no account, no tracking.">
+<link rel="preconnect" href="https://archive.org">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="assets/watch.css">
+</head><body>
+<nav><a class="logo" href="#/">News<em>dork</em></a>
+ <div class="links"><a href="#/">Home</a><a href="#/net/CNNW">Networks</a><a href="#/" onclick="setTimeout(()=>document.getElementById('when').scrollIntoView(),0)">By day</a></div>
+ <div class="sp"></div><label class="srch">⌕ <input id="q" placeholder="Search shows" style="background:none;border:0;color:var(--text);outline:none;font:inherit;width:100%"></label></nav>
+
+<div id="home">
+ <header class="hero" id="hero"><div class="bg" id="hbg"></div><div class="in" id="hin"><div class="boot">Tuning in…</div></div><div class="dots" id="dots"></div></header>
+ <div class="when" id="when"><span class="lbl">BROWSING</span><div id="daypills" style="display:flex;gap:8px"></div><input type="date" id="pick" title="Jump to any date"><div class="sp"></div><div class="chips" id="chips"></div></div>
+ <main id="main"></main>
+ <div class="loader" id="loader">Loading earlier days…</div>
+</div>
+<div id="view" hidden></div>
+
+<footer><span><b>NewsDork</b> · an open-source player for the Internet Archive TV News Archive. Free, no account, no tracking.</span><span class="k">Keep it running <a class="kofi" href="https://ko-fi.com/heyitsdork" target="_blank" rel="noopener">☕ Ko-fi</a> <span title="bc1qhdczc6na0s8thuql98g00g74shqsg8nuqrml75" style="cursor:pointer" onclick="navigator.clipboard?.writeText(this.title);this.textContent='BTC address copied'">₿ BTC</span></span></footer>
+
+<div id="watch" hidden>
+ <div class="stage" id="stage">
+  <video id="vid-a" playsinline preload="auto"></video><video id="vid-b" playsinline preload="auto"></video>
+  <div class="w-top">
+   <button class="w-back" id="w-back" title="Back (Esc)">←</button>
+   <div class="w-id"><span class="net" id="w-net"></span><h1 id="w-title"></h1><p id="w-when"></p></div>
+   <div class="sp"></div><a class="arch" id="w-arch" target="_blank" rel="noopener">archive.org ↗</a>
+  </div>
+  <div class="w-center"><button class="bigplay" id="w-big" hidden>▶</button><div class="spin" id="w-spin" hidden></div><div class="w-err" id="w-err" hidden><b>This one won’t play</b><p id="w-errmsg"></p><button class="b p" id="w-retry">Try again</button></div></div>
+  <div class="w-cc" id="w-cc"></div>
+  <div class="toast" id="toast"></div>
+  <div class="casting" id="casting" hidden><div class="ci">📺</div><b id="cast-dev">Casting</b><span id="cast-st">Connecting…</span></div>
+  <div class="upnext" id="upnext" hidden></div>
+  <div class="w-bot">
+   <div class="scrub" id="scrub"><div class="tr" id="tr"><div id="bufs"></div><div class="pl" id="pl"></div><div class="kn" id="kn"></div></div><div class="prev" id="prev"><img id="prev-img" alt=""><span id="prev-t"></span></div></div>
+   <div class="ctl">
+    <button class="ib" id="c-play" title="Play/pause (Space)">▶</button>
+    <button class="ib txt" id="c-back" title="Back 10s (←)">−10</button>
+    <button class="ib txt" id="c-fwd" title="Forward 30s (→)">+30</button>
+    <button class="ib" id="c-mute" title="Mute (M)">🔊</button><input type="range" id="c-vol" min="0" max="1" step="0.05">
+    <span class="time" id="c-time">0:00 / 0:00</span>
+    <span class="sp"></span>
+    <span class="mode" id="c-mode"></span>
+    <google-cast-launcher id="c-cast" title="Cast to a TV" style="display:none;width:26px;height:26px;margin:0 8px;cursor:pointer;--connected-color:#FF4D2E;--disconnected-color:#fff"></google-cast-launcher>
+    <button class="ib txt" id="c-share" title="Copy a link to this moment">SHARE</button>
+    <button class="ib txt" id="c-cc" title="Captions (C)" aria-pressed="true">CC</button>
+    <button class="ib txt" id="c-tx" title="Transcript (T)" aria-pressed="false">TRANSCRIPT</button>
+    <button class="ib" id="c-fs" title="Fullscreen (F)">⤢</button>
+   </div>
+  </div>
+ </div>
+ <aside class="drawer" id="drawer">
+  <div class="dh"><div class="r1"><h3>Transcript</h3><select id="trk"></select></div><input id="tx-find" placeholder="Find in this broadcast"><div class="hits" id="tx-hits"></div></div>
+  <div class="tx" id="tx"><div class="tmsg">Loading captions…</div></div>
+  <div class="df"><span>Captions via the Internet Archive</span><a href="https://ko-fi.com/heyitsdork" target="_blank" rel="noopener">☕ Support NewsDork</a></div>
+ </aside>
+</div>
+
+<script src="assets/vendor/mp4box.all.min.js"></script>
+<script src="assets/captions.js"></script>
+<script src="assets/engines.js"></script>
+<script src="assets/cast.js"></script>
+<script src="assets/app.js"></script>
+</body></html>
