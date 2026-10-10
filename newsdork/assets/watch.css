@@ -1,0 +1,86 @@
+
+/* ---------- watch view ---------- */
+body.watching{overflow:hidden}
+#watch{position:fixed;inset:0;z-index:50;background:#000;display:grid;grid-template-columns:minmax(0,1fr) 0;transition:grid-template-columns .25s}
+#watch.tx-open{grid-template-columns:minmax(0,1fr) 420px}
+#watch[hidden]{display:none}
+.stage{position:relative;overflow:hidden;background:#000;cursor:default}
+.stage.idle{cursor:none}
+.stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;opacity:0}
+.stage video.is-active{opacity:1}
+.w-top{position:absolute;inset:0 0 auto;z-index:4;display:flex;align-items:center;gap:16px;padding:20px 28px 60px;background:linear-gradient(rgba(0,0,0,.75),rgba(0,0,0,0));transition:opacity .3s}
+.w-back{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);cursor:pointer;font-size:20px;border:0;color:#fff}
+.w-back:hover{background:rgba(255,255,255,.25)}
+.w-id .net{font-size:11px}.w-id h1{margin:3px 0 0;font:400 30px/1.05 'Instrument Serif',Georgia,'Times New Roman',serif}
+.w-id p{margin:2px 0 0;font:500 12px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;color:#bbb}
+.w-top .sp{flex:1}
+.w-top a.arch{font:500 12px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;color:#bbb;border:1px solid rgba(255,255,255,.25);padding:6px 10px;border-radius:999px}
+.w-top a.arch:hover{color:#fff;border-color:#fff}
+.w-cc{position:absolute;left:50%;transform:translateX(-50%);bottom:120px;z-index:3;text-align:center;width:min(86%,980px);pointer-events:none;transition:bottom .3s}
+.stage.idle .w-cc{bottom:46px}
+.w-cc span{background:rgba(0,0,0,.8);color:#fff;font:500 clamp(16px,1.9vw,26px)/1.45 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;padding:2px 10px;white-space:pre-line;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.w-center{position:absolute;inset:0;display:grid;place-items:center;z-index:2;pointer-events:none}
+.w-center>*{pointer-events:auto}
+.bigplay{width:92px;height:92px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#000;font-size:34px;cursor:pointer;padding-left:6px}
+.spin{width:54px;height:54px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;animation:sp 0.9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.w-err{background:rgba(20,20,22,.95);border:1px solid var(--line);border-radius:12px;padding:22px 26px;max-width:440px;text-align:center}
+.w-err p{color:var(--dim);margin:8px 0 16px}
+.w-bot{position:absolute;inset:auto 0 0;z-index:4;padding:60px 28px 18px;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.85));transition:opacity .3s}
+.stage.idle .w-top,.stage.idle .w-bot{opacity:0}
+.scrub{position:relative;height:18px;cursor:pointer;display:flex;align-items:center}
+.scrub .tr{position:relative;height:4px;flex:1;background:rgba(255,255,255,.18);border-radius:4px;transition:height .15s}
+.scrub:hover .tr{height:7px}
+.scrub .buf{position:absolute;top:0;bottom:0;background:rgba(255,255,255,.35);border-radius:4px}
+.scrub .pl{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:4px}
+.scrub .kn{position:absolute;top:50%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px rgba(255,77,46,.35)}
+.prev{position:absolute;bottom:26px;width:220px;margin-left:-110px;pointer-events:none;display:none;text-align:center}
+.prev img{width:220px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;border:2px solid #fff;background:#111;display:block}
+.prev span{display:inline-block;margin-top:6px;font:500 12px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;background:rgba(0,0,0,.8);padding:2px 8px;border-radius:4px}
+.scrub:hover .prev{display:block}
+.ctl{display:flex;align-items:center;gap:6px;margin-top:8px}
+.ib{height:40px;min-width:40px;padding:0 10px;border-radius:8px;border:0;background:transparent;color:#fff;font:600 15px 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;cursor:pointer;display:inline-grid;place-items:center}
+.ib:hover{background:rgba(255,255,255,.14)}
+.ib[aria-pressed=true]{background:rgba(255,255,255,.92);color:#000}
+.ib.txt{font:700 12px 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:.06em}
+.ctl .time{font:500 13px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;color:#ddd;margin:0 8px}
+.ctl .sp{flex:1}
+.ctl input[type=range]{width:90px;accent-color:#fff}
+.mode{font:500 11px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;color:#888;margin-right:6px}
+.toast{position:absolute;left:50%;top:84px;transform:translateX(-50%);background:rgba(255,255,255,.95);color:#000;font:600 13px 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;padding:8px 14px;border-radius:999px;z-index:6;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.upnext{position:absolute;right:28px;bottom:110px;z-index:5;width:340px;background:rgba(18,20,24,.96);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.upnext img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
+.upnext .in{padding:12px 14px}
+.upnext small{font:500 11px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;color:var(--dim);letter-spacing:.08em}
+.upnext h4{margin:4px 0 10px;font:600 16px 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif}
+.upnext .row2{display:flex;gap:8px}
+.upnext .b{padding:9px 14px;font-size:13px}
+/* transcript drawer */
+.drawer{background:#0F1013;border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.dh{padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.dh .r1{display:flex;align-items:center;gap:8px}
+.dh h3{margin:0;font:700 15px 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;flex:1}
+.dh select{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:6px;font:500 12px 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;padding:4px 6px}
+.dh input{width:100%;margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px 12px;font:500 13px 'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;outline:none}
+.dh input:focus{border-color:rgba(255,255,255,.4)}
+.dh .hits{font:500 11px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;color:var(--dim);margin-top:6px;min-height:14px}
+.tx{flex:1;overflow:auto;padding:10px 12px 20px}
+.para{display:grid;grid-template-columns:54px 1fr;gap:6px;padding:8px;border-radius:8px;cursor:pointer;color:#A3A6AC;font-size:14.5px;line-height:1.5}
+.para:hover{background:rgba(255,255,255,.05)}
+.para .ts{font:500 11px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace;padding-top:3px;color:#71757c}
+.para.now{color:#fff;background:rgba(255,77,46,.10)}
+.para.now .ts{color:var(--accent)}
+.para.sp1 .tx1::before{content:'» ';color:var(--accent)}
+.para mark{background:rgba(255,214,10,.35);color:#fff;border-radius:2px}
+.tmsg{color:var(--dim);padding:20px 10px;font-size:14px}
+.df{padding:10px 20px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);display:flex;justify-content:space-between;gap:10px}
+.df a{color:var(--text);font-weight:600}
+.c .wp{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.2)}.c .wp i{display:block;height:100%;background:var(--accent)}
+.empty{padding:30px 48px;color:var(--dim)}
+.boot{height:78vh;display:grid;place-items:center;color:var(--dim);font:500 13px 'Geist Mono',ui-monospace,Menlo,Consolas,monospace}
+@media (max-width:900px){#watch.tx-open{grid-template-columns:minmax(0,1fr) 0}.drawer{display:none}nav .links{display:none}.srch{width:auto;flex:1}nav,.hero .in,.rh,.rail,.when,.daysep,.shows,.eps,.tabs,.net-hero{padding-left:18px;padding-right:18px}.hero .in{left:18px;right:18px}.hero h1{font-size:44px}.c{width:240px}.c.big{width:300px}.when .chips{display:none}}
+
+.casting{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:radial-gradient(circle at 50% 45%,rgba(255,77,46,.18),#000 60%);text-align:center}
+.casting .ci{font-size:56px}.casting b{font:600 22px 'Inter Tight',system-ui,sans-serif}.casting span{color:var(--dim);font:500 13px 'Geist Mono',monospace}
+.casting[hidden],.upnext[hidden],.w-err[hidden],.spin[hidden],.bigplay[hidden]{display:none!important}
