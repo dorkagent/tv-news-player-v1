@@ -80,3 +80,19 @@ footer b{color:var(--text)}footer .k{margin-left:auto;display:flex;gap:10px;alig
 .mon{grid-column:1/-1;font:400 34px/1 'Instrument Serif',Georgia,'Times New Roman',serif;padding:14px 0 0;border-top:1px solid var(--line);margin-top:6px}
 .c .tag,.c h3{cursor:pointer}.c .tag:hover,.c h3:hover{text-decoration:underline}
 .chip,.pill{user-select:none}
+
+/* donate */
+.dn-btn{background:none;border:1px solid var(--line);color:var(--dim);font:600 13px 'Inter Tight',system-ui,sans-serif;padding:8px 14px;border-radius:999px;cursor:pointer;transition:color .15s,border-color .15s}.dn-btn:hover{color:var(--text);border-color:rgba(255,255,255,.3)}
+button.kofi{border:0;font:inherit;font-weight:600;cursor:pointer}
+.dn{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:16px;background:rgba(5,6,8,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}.dn[hidden]{display:none}
+.dn-box{position:relative;width:100%;max-width:440px;background:var(--bg2);border:1px solid var(--line);border-radius:18px;padding:28px}
+.dn-box small{font:500 11px 'Geist Mono',ui-monospace,monospace;letter-spacing:.12em;color:var(--accent)}
+.dn-box h2{margin:6px 0 8px;font:800 28px 'Inter Tight',system-ui,sans-serif;letter-spacing:-.02em}.dn-box h2 em{font:italic 400 32px 'Instrument Serif',Georgia,serif;color:var(--accent)}
+.dn-box p{color:var(--dim);font-size:14px;margin:0 0 18px}.dn-box p.fine{font-size:12px;margin:14px 0 0}
+.dn-x{position:absolute;top:10px;right:14px;background:none;border:0;color:var(--dim);font-size:24px;cursor:pointer}
+.dn-opt{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:12px;padding:12px 14px;margin-top:10px}
+.dn-opt .ic{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700}
+.dn-opt .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px}.dn-opt .tx span{color:var(--dim)}
+.dn-opt code{font:12px 'Geist Mono',ui-monospace,monospace;color:var(--dim);word-break:break-all;user-select:all}
+.dn-opt .b{flex:none;background:rgba(255,255,255,.1);border:0;color:var(--text);font:600 12px 'Inter Tight',system-ui,sans-serif;padding:8px 12px;border-radius:8px;cursor:pointer}.dn-opt .b:hover{background:rgba(255,255,255,.18)}
+@media(max-width:720px){.dn-btn{display:none}}
