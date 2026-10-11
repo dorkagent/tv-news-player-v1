@@ -17,6 +17,12 @@ const dayName=s=>{const diff=Math.round((noonOf(dayKey(Date.now()))-noonOf(s))/8
 const longDay=s=>new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'}).format(noonOf(s));
 const ago=t=>{const m=Math.round((Date.now()-t)/6e4);return m<60?`${m}m ago`:m<1440?`${Math.round(m/60)}h ago`:`${Math.round(m/1440)}d ago`};
 const thumb=(d,sec)=>{const n=Math.round(Math.max(5,Math.min(sec,(d.dur||3600)-15))/5)*5;return `https://archive.org/download/${d.id}/${d.id}.thumbs/${d.id}_${String(n).padStart(6,'0')}.jpg`};
+// A frame can 404 (short items, gaps) or be throttled. Never leave a blank tile: try a nearby
+// frame once, then the item's own poster image.
+document.addEventListener('error',e=>{const im=e.target;if(im.tagName!=='IMG'||!/archive\.org\/download\//.test(im.src))return;
+ const m=im.src.match(/\/download\/([^/]+)\/[^/]+\.thumbs\/[^/]+_(\d{6})\.jpg/);if(!m)return;
+ if(!im.dataset.retry){im.dataset.retry=1;const n=Math.max(1,+m[2]-30);im.src=im.src.replace(/_\d{6}\.jpg$/,'_'+String(n).padStart(6,'0')+'.jpg')}
+ else if(im.dataset.retry==='1'){im.dataset.retry=2;im.src='https://archive.org/services/img/'+m[1]}},true);
 const store={get(k,d){try{const v=localStorage.getItem('nd3_'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('nd3_'+k,JSON.stringify(v))}catch(e){}}};
 
 /* ================= DATA ================= */
@@ -66,17 +72,10 @@ function pump(s,img){if(s.busy||!s.want)return;const u=s.want;if(u===img.src)ret
  if(FRAMES.has(u)){img.src=u;return}
  s.busy=true;const im=new Image();im.onload=()=>{FRAMES.add(u);s.busy=false;if(s.want===u)img.src=u;pump(s,img)};im.onerror=()=>{s.busy=false;if(s.want===u)s.want=null;else pump(s,img)};im.src=u}
 
-// donate dialog
-const DN=$('#donate');let dnFrom=null;
-document.addEventListener('click',e=>{if(e.target.closest('[data-donate]')){dnFrom=document.activeElement;DN.hidden=false;DN.querySelector('.dn-x').focus()}
- else if(!DN.hidden&&(e.target===DN||e.target.closest('[data-close]'))){DN.hidden=true;dnFrom?.focus?.()}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!DN.hidden){DN.hidden=true;dnFrom?.focus?.();e.stopImmediatePropagation()}},true);
-$('#btc-copy').addEventListener('click',e=>{const t=$('#btc').textContent.trim();(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{e.target.textContent='Copied ✓';setTimeout(()=>e.target.textContent='Copy',1800)},()=>{getSelection().selectAllChildren($('#btc'))})});
-
 /* ================= HOME ================= */
 const MAIN=$('#main'),HOME=$('#home'),VIEW=$('#view');
 let HERO=[],hi=0,heroTimer=0;
-function hero(){if(!HERO.length){$('#hin').innerHTML='';return}const d=HERO[hi];$('#hbg').style.backgroundImage=`url(${thumb(d,200)})`;
+function hero(){if(!HERO.length){$('#hin').innerHTML='';return}const d=HERO[hi];$('#hbg').style.backgroundImage=`url("${thumb(d,200)}")`;
  $('#hin').innerHTML=`<span class="net"><i style="background:${ST[d.st][1]}"></i>${ST[d.st][0]} · ${dayName(dayKey(d.t0))}, ${tf.format(d.t0)}</span><h1>${esc(d.show)}</h1><div class="meta"><span>${hm(d.dur)}</span><span>${d.cc?'CC · transcript':'No captions'}</span><span>Archived ${ago(d.t1)}</span></div><div class="btns"><button class="b p" data-play="${d.id}">▶ Play</button><button class="b" data-play="${d.id}" data-tx="1">≡ Read along</button><button class="b" data-showpage="1">All episodes</button></div>`;
  $('#hin [data-showpage]').onclick=()=>location.hash=`#/show/${d.st}/${encodeURIComponent(d.show)}`;
  $('#hin').querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>{if(b.dataset.tx)store.set('tx',true);location.hash='#/watch/'+b.dataset.play});
@@ -215,7 +214,10 @@ function drawBuf(){if(!W.eng)return;const dur=W.eng.duration||1;$('#bufs').inner
 // scrub bar with frame previews
 let dragging=false;const sx=e=>{const r=$('#tr').getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))};
 $('#scrub').addEventListener('mousemove',e=>{if(!W.d)return;const x=sx(e),t=x*(W.eng?.duration||W.d.dur);$('#prev').style.left=Math.max(110,Math.min($('#scrub').clientWidth-110,x*$('#scrub').clientWidth))+'px';
- const u=thumb(W.d,t);if($('#prev-img').src!==u)$('#prev-img').src=u;$('#prev-t').textContent=clock(t);if(dragging){$('#pl').style.width=x*100+'%';$('#kn').style.left=x*100+'%'}});
+ previewFrame(thumb(W.d,Math.round(t/10)*10));$('#prev-t').textContent=clock(t);if(dragging){$('#pl').style.width=x*100+'%';$('#kn').style.left=x*100+'%'}});
+const PV={want:null,busy:false};
+function previewFrame(u){PV.want=u;if(PV.busy)return;const img=$('#prev-img');if(img.src===u)return;if(FRAMES.has(u)){img.src=u;return}
+ PV.busy=true;const im=new Image();const done=ok=>{PV.busy=false;if(ok)FRAMES.add(u);if(ok&&PV.want===u)img.src=u;else if(PV.want!==u)previewFrame(PV.want)};im.onload=()=>done(true);im.onerror=()=>done(false);im.src=u}
 $('#scrub').addEventListener('mousedown',e=>{dragging=true;const up=ev=>{dragging=false;removeEventListener('mouseup',up);if(W.eng){W.eng.seek(sx(ev)*W.eng.duration)}};addEventListener('mouseup',up)});
 $('#scrub').addEventListener('touchend',e=>{const t=e.changedTouches[0];if(W.eng)W.eng.seek(sx(t)*W.eng.duration)});
 const toggle=()=>{if(!W.eng)return;W.eng.paused?W.eng.play():W.eng.pause()};
