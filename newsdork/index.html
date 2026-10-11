@@ -3,8 +3,8 @@
 <meta name="description" content="An open-source player for the Internet Archive TV News Archive. Free, no account, no tracking.">
 <link rel="preconnect" href="https://archive.org">
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/watch.css">
+<link rel="stylesheet" href="assets/base.css?v=649d9db2">
+<link rel="stylesheet" href="assets/watch.css?v=27d9802e">
 </head><body>
 <nav><a class="logo" href="#/">News<em>dork</em></a>
  <div class="links"><a href="#/">Home</a><a href="#/net/CNNW">Networks</a><a href="#/" onclick="setTimeout(()=>document.getElementById('when').scrollIntoView(),0)">By day</a></div>
@@ -67,10 +67,21 @@
  </aside>
 </div>
 
-<script src="assets/vendor/mp4box.1.js"></script>
-<script src="assets/vendor/mp4box.2.js"></script>
-<script src="assets/captions.js"></script>
-<script src="assets/engines.js"></script>
-<script src="assets/cast.js"></script>
-<script src="assets/app.js"></script>
+<script>/* donate dialog: inline so it works even if a cached app.js is older than this page */
+(function(){var D=document.getElementById('donate'),from=null;if(!D)return;
+function open(){from=document.activeElement;D.hidden=false;D.querySelector('.dn-x').focus()}
+function close(){D.hidden=true;if(from&&from.focus)from.focus()}
+document.addEventListener('click',function(e){if(e.target.closest('[data-donate]')){e.preventDefault();open()}else if(!D.hidden&&(e.target===D||e.target.closest('[data-close]')))close()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!D.hidden){close();e.stopImmediatePropagation()}},true);
+document.getElementById('btc-copy').addEventListener('click',function(e){var b=e.currentTarget,t=document.getElementById('btc').textContent.trim();
+ function ok(){b.textContent='Copied \u2713';setTimeout(function(){b.textContent='Copy'},1800)}
+ function sel(){var r=document.createRange();r.selectNodeContents(document.getElementById('btc'));var s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Selected, press Ctrl+C'}
+ if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(ok,sel);else sel()});
+})();</script>
+<script src="assets/vendor/mp4box.1.js?v=c43ce0b1"></script>
+<script src="assets/vendor/mp4box.2.js?v=4eddaa0f"></script>
+<script src="assets/captions.js?v=ad457f2e"></script>
+<script src="assets/engines.js?v=a08d3333"></script>
+<script src="assets/cast.js?v=4871f811"></script>
+<script src="assets/app.js?v=2195153a"></script>
 </body></html>
