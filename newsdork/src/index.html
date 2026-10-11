@@ -8,7 +8,7 @@
 </head><body>
 <nav><a class="logo" href="#/">News<em>dork</em></a>
  <div class="links"><a href="#/">Home</a><a href="#/net/CNNW">Networks</a><a href="#/" onclick="setTimeout(()=>document.getElementById('when').scrollIntoView(),0)">By day</a></div>
- <div class="sp"></div><label class="srch">⌕ <input id="q" placeholder="Search shows" style="background:none;border:0;color:var(--text);outline:none;font:inherit;width:100%"></label></nav>
+ <div class="sp"></div><button class="dn-btn" data-donate title="Support this free, open-source player">♥ Donate</button><label class="srch">⌕ <input id="q" placeholder="Search shows" style="background:none;border:0;color:var(--text);outline:none;font:inherit;width:100%"></label></nav>
 
 <div id="home">
  <header class="hero" id="hero"><div class="bg" id="hbg"></div><div class="in" id="hin"><div class="boot">Tuning in…</div></div><div class="dots" id="dots"></div></header>
@@ -18,7 +18,16 @@
 </div>
 <div id="view" hidden></div>
 
-<footer><span><b>NewsDork</b> · an open-source player for the Internet Archive TV News Archive. Free, no account, no tracking.</span><span class="k">Keep it running <a class="kofi" href="https://ko-fi.com/heyitsdork" target="_blank" rel="noopener">☕ Ko-fi</a> <span title="bc1qhdczc6na0s8thuql98g00g74shqsg8nuqrml75" style="cursor:pointer" onclick="navigator.clipboard?.writeText(this.title);this.textContent='BTC address copied'">₿ BTC</span></span></footer>
+<footer><span><b>NewsDork</b> · an open-source player for the Internet Archive TV News Archive. Free, no account, no tracking.</span><span class="k">Keep it running <button class="kofi" data-donate>♥ Donate</button></span></footer>
+<div class="dn" id="donate" hidden role="dialog" aria-modal="true" aria-labelledby="dn-h"><div class="dn-box">
+ <button class="dn-x" data-close aria-label="Close">×</button>
+ <small>SUPPORT THE PLAYER</small><h2 id="dn-h">Keep NewsDork <em>free</em></h2>
+ <p>NewsDork is free and open-source. Donations fund development of the player itself. The Archive's streams stay free for everyone.</p>
+ <div class="dn-opt"><span class="ic" style="background:#F7931A">₿</span><div class="tx"><b>Bitcoin</b><code id="btc">bc1qhdczc6na0s8thuql98g00g74shqsg8nuqrml75</code></div><button class="b" id="btc-copy">Copy</button></div>
+ <div class="dn-opt"><span class="ic" style="background:#FF5E5B">☕</span><div class="tx"><b>Ko-fi</b><span>Donate by card</span></div><a class="b" href="https://ko-fi.com/heyitsdork" target="_blank" rel="noopener">Open Ko-fi</a></div>
+ <p class="fine">Every contribution keeps the player free. No account, no tracking, ever.</p>
+</div></div>
+
 
 <div id="watch" hidden>
  <div class="stage" id="stage">
