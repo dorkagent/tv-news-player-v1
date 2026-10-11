@@ -53,10 +53,25 @@ document.addEventListener('click',e=>{const t=e.target;
  const tag=t.closest('.tag[data-net]');if(tag){e.preventDefault();location.hash='#/net/'+tag.dataset.net;return}
  const h3=t.closest('h3[data-show]');if(h3){location.hash=`#/show/${h3.dataset.st}/${encodeURIComponent(h3.dataset.show)}`;return}
  const c=t.closest('.c[data-id]');if(c){const p=prog[c.dataset.id];location.hash=`#/watch/${c.dataset.id}${p?'?t='+p.t:''}`}});
-// hover-scrub: the Archive keeps a frame every 5 seconds
-document.addEventListener('mousemove',e=>{const c=e.target.closest&&e.target.closest('.c[data-id]');if(!c)return;const d=REG.get(c.dataset.id);if(!d)return;const f=c.querySelector('.f'),img=f.querySelector('img'),bar=f.querySelector('.scrub i');
- if(!c.dataset.orig){c.dataset.orig=img.src;c.addEventListener('mouseleave',()=>{img.src=c.dataset.orig;if(bar)bar.style.width=0},{once:true});setTimeout(()=>delete c.dataset.orig,0)}
- const r=f.getBoundingClientRect(),x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));const u=thumb(d,x*d.dur);if(img.src!==u)img.src=u;if(bar)bar.style.width=x*100+'%'});
+// hover-scrub: the Archive keeps a frame every 5 seconds. Each frame is preloaded off-screen and only
+// swapped in once it has loaded, so the card never blanks; one request at a time, latest wins.
+const FRAMES=new Set();
+document.addEventListener('mousemove',e=>{const c=e.target.closest&&e.target.closest('.c[data-id]');if(!c)return;const d=REG.get(c.dataset.id);if(!d||!d.dur)return;const f=c.querySelector('.f'),img=f.querySelector('img'),bar=f.querySelector('.scrub i');
+ if(!c._scrub){const s=c._scrub={orig:img.src,want:null,busy:false};FRAMES.add(s.orig);
+  c.addEventListener('mouseleave',()=>{s.want=null;img.src=s.orig;if(bar)bar.style.width=0;c._scrub=null},{once:true})}
+ const s=c._scrub,r=f.getBoundingClientRect(),x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));if(bar)bar.style.width=x*100+'%';
+ const steps=Math.max(8,Math.min(40,Math.round(d.dur/60))); // ~1 frame per minute, 8 to 40 stops
+ s.want=thumb(d,Math.round(x*steps)/steps*d.dur);pump(s,img)});
+function pump(s,img){if(s.busy||!s.want)return;const u=s.want;if(u===img.src)return;
+ if(FRAMES.has(u)){img.src=u;return}
+ s.busy=true;const im=new Image();im.onload=()=>{FRAMES.add(u);s.busy=false;if(s.want===u)img.src=u;pump(s,img)};im.onerror=()=>{s.busy=false;if(s.want===u)s.want=null;else pump(s,img)};im.src=u}
+
+// donate dialog
+const DN=$('#donate');let dnFrom=null;
+document.addEventListener('click',e=>{if(e.target.closest('[data-donate]')){dnFrom=document.activeElement;DN.hidden=false;DN.querySelector('.dn-x').focus()}
+ else if(!DN.hidden&&(e.target===DN||e.target.closest('[data-close]'))){DN.hidden=true;dnFrom?.focus?.()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!DN.hidden){DN.hidden=true;dnFrom?.focus?.();e.stopImmediatePropagation()}},true);
+$('#btc-copy').addEventListener('click',e=>{const t=$('#btc').textContent.trim();(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{e.target.textContent='Copied ✓';setTimeout(()=>e.target.textContent='Copy',1800)},()=>{getSelection().selectAllChildren($('#btc'))})});
 
 /* ================= HOME ================= */
 const MAIN=$('#main'),HOME=$('#home'),VIEW=$('#view');
