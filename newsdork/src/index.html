@@ -67,6 +67,17 @@
  </aside>
 </div>
 
+<script>/* donate dialog: inline so it works even if a cached app.js is older than this page */
+(function(){var D=document.getElementById('donate'),from=null;if(!D)return;
+function open(){from=document.activeElement;D.hidden=false;D.querySelector('.dn-x').focus()}
+function close(){D.hidden=true;if(from&&from.focus)from.focus()}
+document.addEventListener('click',function(e){if(e.target.closest('[data-donate]')){e.preventDefault();open()}else if(!D.hidden&&(e.target===D||e.target.closest('[data-close]')))close()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!D.hidden){close();e.stopImmediatePropagation()}},true);
+document.getElementById('btc-copy').addEventListener('click',function(e){var b=e.currentTarget,t=document.getElementById('btc').textContent.trim();
+ function ok(){b.textContent='Copied \u2713';setTimeout(function(){b.textContent='Copy'},1800)}
+ function sel(){var r=document.createRange();r.selectNodeContents(document.getElementById('btc'));var s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Selected, press Ctrl+C'}
+ if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(ok,sel);else sel()});
+})();</script>
 <script src="assets/vendor/mp4box.all.min.js"></script>
 <script src="assets/captions.js"></script>
 <script src="assets/engines.js"></script>
